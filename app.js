@@ -99,8 +99,7 @@ $("readValue").textContent="スキャン待機中";$("itemMsg").textContent="";$
 .classList.remove("hidden")}}else{img.classList.add("hidden");no.classList.remove("hidden")}updateStaffLabels();show("itemView")}
 function goNextItem(){const n=firstPendingIndex();if(n>=0){state.currentIndex=n;renderItem()}else renderComplete()}
 function markOk(r,method,read,qty){const t=nowText();setResult(r,{invoice_no:r.invoice_no,order_no:r.order_no,line_no:r.line_no,sku:r
-.sku,read_barcode:read||"",master_barcode:state.barcodeMap.get(r.sku)||"",quantity:r.quantity,checked_quantity:qty||r.quantity,status:"OK",hold_reason:"",staff_code:state.staf
-f.staff_code,admin_staff_code:"",check_method:method,started_at:state.startedAt,checked_at:t,completed_at:"",memo:""})}
+.sku,read_barcode:read||"",master_barcode:state.barcodeMap.get(r.sku)||"",quantity:r.quantity,checked_quantity:qty||r.quantity,status:"OK",hold_reason:"",staff_code:state.staff.staff_code,admin_staff_code:"",check_method:method,started_at:state.startedAt,checked_at:t,completed_at:"",memo:""})}
 function markHold(r,reason,memo=""){const t=nowText();setResult(r,{invoice_no:r.invoice_no,order_no:r.order_no,line_no:r.line_no,sku:r.sku,read_barcode:state
 .lastReadBarcode||"",master_barcode:state.barcodeMap.get(r.sku)||"",quantity:r.quantity,checked_quantity:"",status:"保留",hold_reason:reason,staff_code:state.staff
 .staff_code,admin_staff_code:"",check_method:"hold",started_at:state.startedAt,checked_at:t,completed_at:"",memo})}
