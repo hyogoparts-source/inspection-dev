@@ -1,7 +1,13 @@
 
 const state={staff:null,staffList:[],inspectionRows:[],barcodeMap:new Map(),aliasMap:new Map(),noBarcodeSet:new Set(),currentInvoice:null,currentItems:[],currentIndex:0,results:[],startedAt:null,lastReadBarcode:""};
 const $=id=>document.getElementById(id);
-function show(id){document.querySelectorAll(".view").forEach(v=>v.classList.remove("active"));$(id).classList.add("active");setTimeout(()=>{if(id==="scanInvoiceView")$("invoiceInput").focus();if(id==="itemView")$("barcodeInput").focus()},100)}
+function show(id){
+  document.querySelectorAll(".view").forEach(v=>v.classList.remove("active"));
+  $(id).classList.add("active");
+  setTimeout(()=>{
+    if(id==="scanInvoiceView") $("invoiceInput").focus();
+  },100);
+}
 function showMsg(id,text,ok=false){const el=$(id);el.textContent=text||"";el.style.color=ok?"#047857":"#b91c1c"}
 
 function currentStaffText(){
@@ -88,15 +94,26 @@ $("itemShipName").textContent=r.ship_name||"";
 $("itemSku").textContent=r.sku;
 $("itemQty").textContent=`数量：${r.quantity}`;
 $("itemName").textContent=r.item_name||"";
-$("readValue").textContent="スキャン待機中";$("itemMsg").textContent="";$("quantityPanel").classList.add("hidden");$("checkedQtyInput").value="";const img=$("itemImage"),no=$("noImage");if(r.image_url){img.src=r.image_url;img.classList.remove("hidden");no.classList.add("hidden");img.onerror=()=>{img.classList.add("hidden");no.classList.remove("hidden")}}else{img.classList.add("hidden");no.classList.remove("hidden")}updateStaffLabels();show("itemView")}
+$("readValue").textContent="スキャン待機中";$("itemMsg").textContent="";$("quantityPanel")
+.classList.add("hidden");$("checkedQtyInput").value="";const img=$("itemImage"),no=$("noImage");if(r.image_url){img.src=r.image_url;img.classList.remove("hidden");no.classList.add("hidden");img.onerror=()=>{img.classList.add("hidden");no
+.classList.remove("hidden")}}else{img.classList.add("hidden");no.classList.remove("hidden")}updateStaffLabels();show("itemView")}
 function goNextItem(){const n=firstPendingIndex();if(n>=0){state.currentIndex=n;renderItem()}else renderComplete()}
-function markOk(r,method,read,qty){const t=nowText();setResult(r,{invoice_no:r.invoice_no,order_no:r.order_no,line_no:r.line_no,sku:r.sku,read_barcode:read||"",master_barcode:state.barcodeMap.get(r.sku)||"",quantity:r.quantity,checked_quantity:qty||r.quantity,status:"OK",hold_reason:"",staff_code:state.staff.staff_code,admin_staff_code:"",check_method:method,started_at:state.startedAt,checked_at:t,completed_at:"",memo:""})}
-function markHold(r,reason,memo=""){const t=nowText();setResult(r,{invoice_no:r.invoice_no,order_no:r.order_no,line_no:r.line_no,sku:r.sku,read_barcode:state.lastReadBarcode||"",master_barcode:state.barcodeMap.get(r.sku)||"",quantity:r.quantity,checked_quantity:"",status:"保留",hold_reason:reason,staff_code:state.staff.staff_code,admin_staff_code:"",check_method:"hold",started_at:state.startedAt,checked_at:t,completed_at:"",memo})}
-function handleBarcode(raw){const r=state.currentItems[state.currentIndex],read=normalizeBarcode(raw);if(!r||!read)return;state.lastReadBarcode=read;$("readValue").textContent=read;const allowed=allowedBarcodes(r.sku);if(!allowed.includes(read))return showBarcodeMismatch(r,read,allowed[0]||"");if(Number(r.quantity||1)>=2){showQuantityModal(r)}else{markOk(r,"barcode",read,"1");showMsg("itemMsg","✓ 一致",true);setTimeout(goNextItem,600)}}
-function showModal(t,b,acts){$("modalTitle").textContent=t;$("modalBody").innerHTML=b;$("modalActions").innerHTML="";acts.forEach(a=>{const btn=document.createElement("button");btn.className="btn "+(a.kind||"");btn.textContent=a.label;btn.onclick=a.onClick;$("modalActions").appendChild(btn)});$("modal").classList.remove("hidden")}
+function markOk(r,method,read,qty){const t=nowText();setResult(r,{invoice_no:r.invoice_no,order_no:r.order_no,line_no:r.line_no,sku:r
+.sku,read_barcode:read||"",master_barcode:state.barcodeMap.get(r.sku)||"",quantity:r.quantity,checked_quantity:qty||r.quantity,status:"OK",hold_reason:"",staff_code:state.staf
+f.staff_code,admin_staff_code:"",check_method:method,started_at:state.startedAt,checked_at:t,completed_at:"",memo:""})}
+function markHold(r,reason,memo=""){const t=nowText();setResult(r,{invoice_no:r.invoice_no,order_no:r.order_no,line_no:r.line_no,sku:r.sku,read_barcode:state
+.lastReadBarcode||"",master_barcode:state.barcodeMap.get(r.sku)||"",quantity:r.quantity,checked_quantity:"",status:"保留",hold_reason:reason,staff_code:state.staff
+.staff_code,admin_staff_code:"",check_method:"hold",started_at:state.startedAt,checked_at:t,completed_at:"",memo})}
+function handleBarcode(raw){const r=state.currentItems[state.currentIndex],read=normalizeBarcode(raw);if(!r||!read)return;state.lastReadBarcode=read;$("readValue")
+.textContent=read;const allowed=allowedBarcodes(r.sku);if(!allowed.includes(read))return showBarcodeMismatch(r,read,allowed[0]||"");if(Number(r.quantity||1)>=2){showQuantityModal(r)}else{markOk(r,"barcode",read,"1");showMsg("itemMsg","✓ 一致",true);setTimeout(goNextItem,600)}}
+function showModal(t,b,acts){$("modalTitle").textContent=t;$("modalBody").innerHTML=b;$("modalActions").innerHTML="";acts
+.forEach(a=>{const btn=document.createElement("button");btn.className="btn "+(a.kind||"");btn
+.textContent=a.label;btn.onclick=a.onClick;$("modalActions").appendChild(btn)});$("modal").classList.remove("hidden")}
 function closeModal(){$("modal").classList.add("hidden")}
-function showBarcodeMismatch(r,read,master){showModal("バーコード不一致",`<p><strong>品番</strong><br>${r.sku}</p><p><strong>登録</strong><br>${master||"登録なし"}</p><p><strong>読取</strong><br>${read}</p>`,[{label:"再スキャン",onClick:()=>{closeModal();$("barcodeInput").value="";$("barcodeInput").focus()}},{label:"正しければ登録",kind:"primary",onClick:()=>showAdminRegister(r,read,master)},{label:"保留",kind:"danger",onClick:()=>{closeModal();showHoldModal(r)}}])}
-function showAdminRegister(r,read,master){showModal("管理者社員番号",`<input id="adminCodeInput" class="input big" inputmode="numeric" pattern="[0-9]*" autocomplete="off"><p id="adminMsg" class="msg"></p>`,[{label:"確認",kind:"primary",onClick:()=>{const code=$("adminCodeInput").value.trim();const admin=state.staffList.find(s=>s.staff_code===code&&s.active_flag==="1"&&s.is_admin==="1");if(!admin){$("adminMsg").textContent="管理者社員番号が確認できません";return}showModal("正しければ登録",`<p><strong>品番</strong><br>${r.sku}</p><p><strong>商品名</strong><br>${r.item_name||""}</p><p><strong>登録済</strong><br>${master||"登録なし"}</p><p><strong>今回読取</strong><br>${read}</p><p>このバーコードを追加登録しますか？</p>`,[{label:"登録する",kind:"primary",onClick:()=>{const arr=state.aliasMap.get(r.sku)||[];if(!arr.includes(read))arr.push(read);state.aliasMap.set(r.sku,arr);markOk(r,"barcode_admin_alias",read,r.quantity);const res=getResult(r);res.admin_staff_code=admin.staff_code;res.memo="正しければ登録";closeModal();showMsg("itemMsg","バーコードを登録しました",true);setTimeout(goNextItem,800)}},{label:"キャンセル",onClick:()=>{closeModal();$("barcodeInput").focus()}}])}},{label:"キャンセル",onClick:()=>{closeModal();$("barcodeInput").focus()}}]);setTimeout(()=>$("adminCodeInput")?.focus(),100)}
+function showBarcodeMismatch(r,read,master){showModal("バーコード不一致",`<p><strong>品番</strong><br>${r.sku}</p><p><strong>登録</strong><br>${master||"登録なし"}</p><p><strong>読取</strong><br>${read}</p>`,[{label:"再スキャン",onClick:()=>{closeModal();$("barcodeInput").value="";$("barcodeInput")
+.focus()}},{label:"正しければ登録",kind:"primary",onClick:()=>showAdminRegister(r,read,master)},{label:"保留",kind:"danger",onClick:()=>{closeModal();showHoldModal(r)}}])}
+function showAdminRegister(r,read,master){showModal("管理者社員番号",`<input id="adminCodeInput" class="input big" inputmode="numeric" pattern="[0-9]*" autocomplete="off"><p id="adminMsg" class="msg"></p>`,[{label:"確認",kind:"primary",onClick:()=>{const code=$("adminCodeInput")
+.value.trim();const admin=state.staffList.find(s=>s.staff_code===code&&s.active_flag==="1"&&s.is_admin==="1");if(!admin){$("adminMsg").textContent="管理者社員番号が確認できません";return}showModal("正しければ登録",`<p><strong>品番</strong><br>${r.sku}</p><p><strong>商品名</strong><br>${r.item_name||""}</p><p><strong>登録済</strong><br>${master||"登録なし"}</p><p><strong>今回読取</strong><br>${read}</p><p>このバーコードを追加登録しますか？</p>`,[{label:"登録する",kind:"primary",onClick:()=>{const arr=state.aliasMap.get(r.sku)||[];if(!arr.includes(read))arr.push(read);state.aliasMap.set(r.sku,arr);markOk(r,"barcode_admin_alias",read,r.quantity);const res=getResult(r);res.admin_staff_code=admin.staff_code;res.memo="正しければ登録";closeModal();showMsg("itemMsg","バーコードを登録しました",true);setTimeout(goNextItem,800)}},{label:"キャンセル",onClick:()=>{closeModal();$("barcodeInput").focus()}}])}},{label:"キャンセル",onClick:()=>{closeModal();$("barcodeInput").focus()}}]);setTimeout(()=>$("adminCodeInput")?.focus(),100)}
 
 function showQuantityModal(r){
   const need = String(Number(r.quantity || 0));
@@ -132,7 +149,7 @@ function showQuantityModal(r){
         setTimeout(goNextItem,600);
       }},
       {label:"保留", kind:"danger", onClick:()=>{ closeModal(); showHoldModal(r); }},
-      {label:"キャンセル", onClick:()=>{ closeModal(); $("barcodeInput").focus(); }}
+      {label:"キャンセル", onClick:()=>{ closeModal(); }}
     ]
   );
 
@@ -147,7 +164,7 @@ function showQuantityModal(r){
   setTimeout(()=>$("modalQtyInput")?.focus(),100);
 }
 
-function showHoldModal(r){const reasons=["数量不足","JAN不明","商品なし","送り状修正","その他"];showModal("保留理由",`<div>${reasons.map(x=>`<button class="btn holdReason" data-r="${x}">${x}</button>`).join("")}<textarea id="holdMemo" class="input" placeholder="メモ"></textarea></div>`,[{label:"キャンセル",onClick:()=>{closeModal();$("barcodeInput").focus()}}]);document.querySelectorAll(".holdReason").forEach(btn=>btn.onclick=()=>{markHold(r,btn.dataset.r,$("holdMemo").value||"");closeModal();renderOrder()})}
+function showHoldModal(r){const reasons=["数量不足","JAN不明","商品なし","送り状修正","その他"];showModal("保留理由",`<div>${reasons.map(x=>`<button class="btn holdReason" data-r="${x}">${x}</button>`).join("")}<textarea id="holdMemo" class="input" placeholder="メモ"></textarea></div>`,[{label:"キャンセル",onClick:()=>{closeModal();}}]);document.querySelectorAll(".holdReason").forEach(btn=>btn.onclick=()=>{markHold(r,btn.dataset.r,$("holdMemo").value||"");closeModal();renderOrder()})}
 function renderComplete(){
   const items=state.currentItems;
   const resultRows=items.map(i=>getResult(i)).filter(Boolean);
@@ -293,4 +310,4 @@ document.querySelectorAll(".keypad button").forEach(btn=>btn.onclick=()=>{const 
 $("confirmQtyBtn").onclick=()=>{const r=state.currentItems[state.currentIndex],need=String(Number(r.quantity||0)),checked=String(Number($("checkedQtyInput").value||0));if(!$("checkedQtyInput").value)return showMsg("itemMsg","確認数量を入力してください");if(need!==checked)return showMsg("itemMsg","数量が一致しません。保留処理を行ってください。");markOk(r,state.lastReadBarcode?"barcode":"manual",state.lastReadBarcode,checked);showMsg("itemMsg","✓ 数量一致",true);setTimeout(goNextItem,600)};
 $("saveResultBtn").onclick=downloadCsv;$("nextInvoiceBtn").onclick=()=>{$("invoiceInput").value="";$("nextInvoiceBtn").classList.add("hidden");$("saveMsg").textContent="";show("scanInvoiceView")};
 $("reloadBtn").onclick=()=>showModal("CSV再読込","<p>未保存の検品データがある場合は、先に保存してください。</p>",[{label:"保存してから再読込",kind:"primary",onClick:()=>{closeModal();renderComplete()}},{label:"再読込する",onClick:()=>{closeModal();show("loadView")}},{label:"キャンセル",onClick:closeModal}]);
-window.addEventListener("click",()=>{if($("itemView").classList.contains("active"))$("barcodeInput").focus()});
+
