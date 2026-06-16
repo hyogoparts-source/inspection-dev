@@ -66,7 +66,7 @@
   font-size:16px;
   line-height:1.2;
   margin:4px 0;
-  max-height:40px;
+  max-height:38px;
   overflow:hidden;
 }
 .readBox{
@@ -76,7 +76,7 @@
   margin:2px 0;
 }
 .readValue{
-  font-size:20px;
+  font-size:18px;
   font-weight:900;
   word-break:break-all;
 }
@@ -208,4 +208,10 @@
 .btn{
   min-height:40px;
   margin:4px 0;
+}
+
+#itemMsg{
+  min-height:0;
+  margin:0;
+  padding:0;
 }
