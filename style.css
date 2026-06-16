@@ -190,8 +190,8 @@
 }
 /* 読取値エリアの空白削減 */
 .readBox{
-  padding:2px 0;
-  margin:2px 0 4px;
+  padding:2px 0 !important;
+  margin:2px 0 !important;
 }
 
 .readValue{
@@ -202,7 +202,7 @@
 
 /* 読取値の下のボタン間隔を詰める */
 #manualBtn{
-  margin-top:4px;
+  margin-top:2px !important;
 }
 
 .btn{
@@ -214,4 +214,11 @@
   min-height:0;
   margin:0;
   padding:0;
+}
+#quantityPanel.hidden{
+  display:none !important;
+  height:0 !important;
+  margin:0 !important;
+  padding:0 !important;
+  border:0 !important;
 }
