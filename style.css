@@ -5,7 +5,7 @@
   margin:0 auto;
   padding:8px;
 }
-.view{display:none;background:var(--card);min-height:calc(100vh - 28px);padding:18px;border-radius:18px;box-shadow:0 4px 16px #0001}
+.view{display:none;background:var(--card);min-height:calc(100vh - 28px);padding:12px;border-radius:14px;box-shadow:0 4px 16px #0001}
 .view.active{display:block}h1{margin:0 0 20px;font-size:28px}
 .label,.small{display:block;color:var(--muted);font-size:14px;margin-bottom:6px}
 .input{width:100%;border:2px solid var(--line);border-radius:12px;padding:12px;font-size:20px;margin-bottom:12px}
@@ -55,16 +55,31 @@
 .progress{background:#ecfeff;border:1px solid #99f6e4;padding:12px;border-radius:12px;margin:14px 0;font-weight:800}
 .itemRow{padding:12px;border:1px solid var(--line);border-radius:12px;margin-bottom:10px;background:#fff}.itemRow .state{font-weight:900}
 .itemRow.ok{border-color:var(--ok)}.itemRow.hold{border-color:var(--hold)}
-.imageWrap{height:320px;border:1px solid var(--line);border-radius:16px;background:#f9fafb;display:flex;align-items:center;justify-content:center;overflow:hidden}
+.imageWrap{height:280px;border:1px solid var(--line);border-radius:16px;background:#f9fafb;display:flex;align-items:center;justify-content:center;overflow:hidden}
 .imageWrap img{
   width:auto;
   height:100%;
 }
 .noImage{color:var(--muted);font-size:24px;font-weight:800}.sku{font-size:30px;font-weight:900;margin-top:14px}
 .qty{font-size:36px;font-weight:900;margin-top:4px}
-.itemName{font-size:18px;line-height:1.35;margin:8px 0 6px;max-height:48px;overflow:hidden}
-.readBox{border-top:1px solid var(--line);border-bottom:1px solid var(--line);padding:6px 0;margin:6px 0}
-.readValue{font-size:26px;font-weight:900;word-break:break-all}.hiddenInput{position:fixed;left:-9999px;top:-9999px;opacity:0}
+.itemName{
+  font-size:16px;
+  line-height:1.2;
+  margin:4px 0;
+  max-height:40px;
+  overflow:hidden;
+}
+.readBox{
+  border-top:1px solid var(--line);
+  border-bottom:1px solid var(--line);
+  padding:2px 0;
+  margin:2px 0;
+}
+.readValue{
+  font-size:20px;
+  font-weight:900;
+  word-break:break-all;
+}
 .hidden{display:none!important}
 .quantityPanel{border:2px solid var(--primary);padding:12px;border-radius:14px;margin:12px 0}
 .needed{font-size:24px;font-weight:900;margin-bottom:8px}.qtyInput{text-align:center;font-size:30px;font-weight:900}
