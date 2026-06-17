@@ -37,7 +37,16 @@
   <p id="staffNameLabel" class="staff"></p>
   <button id="changeStaffBtn" class="btn smallBtn">作業者変更</button>
   <label class="label">送り状No</label>
-  <input id="invoiceInput" class="input big" inputmode="numeric" pattern="[0-9]*" autocomplete="off">
+  <input
+    id="invoiceInput"
+    class="input big"
+    type="text"
+    inputmode="text"
+    autocomplete="off"
+    autocorrect="off"
+    autocapitalize="off"
+    spellcheck="false"
+  >
   <button id="invoiceSearchBtn" class="btn primary">表示</button>
   <button id="reloadBtn" class="btn">CSV再読込</button>
   <p id="invoiceMsg" class="msg"></p>
