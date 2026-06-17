@@ -36,12 +36,12 @@ margin-bottom:12px;
 .btn{
   display:block;
   width:100%;
-  min-height:38px;
+  min-height:39px;
   border:0;
   border-radius:12px;
   background:#e5e7eb;
   color:var(--text);
-  font-size:18px;
+  font-size:19px;
   font-weight:700;
   margin:2px 0;
 }
@@ -242,8 +242,8 @@ padding:18px}
 }
 
 .smallBtn {
-  min-height: 32px;
-  font-size: 14px;
+  min-height: 34px;
+  font-size: 16px;
   margin: 2px 0;
 }
 .smallStaff {
@@ -302,8 +302,8 @@ html, body{
 }
 
 .itemInfoBox{
-  font-size:13px;
-  line-height:1.15;
+  font-size:16px;
+  line-height:1.2;
   margin-bottom:4px;
 }
 
