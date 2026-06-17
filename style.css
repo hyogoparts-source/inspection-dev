@@ -36,12 +36,12 @@ margin-bottom:12px;
 .btn{
   display:block;
   width:100%;
-  min-height:34px;
+  min-height:38px;
   border:0;
   border-radius:12px;
   background:#e5e7eb;
   color:var(--text);
-  font-size:16px;
+  font-size:18px;
   font-weight:700;
   margin:2px 0;
 }
@@ -82,7 +82,7 @@ margin-bottom:12px;
 }
 
 .header .strong{
-  font-size:20px;
+  font-size:24px;
   font-weight:900;
 }
 .strong{font-size:20px;font-weight:800}
@@ -132,7 +132,7 @@ font-weight:900;
 margin-bottom:8px}
 
 .qtyInput{text-align:center;
-font-size:30px;
+font-size:28px;
 font-weight:900;
 }
 .keypad{display:grid;
