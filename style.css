@@ -1,130 +1,313 @@
-<!doctype html>
-<html lang="ja">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-title" content="出荷検品">
-  <title>HYOGO PARTS 出荷検品</title>
-  <link rel="stylesheet" href="./style.css">
-</head>
-<body>
-<main id="app">
-<section id="loginView" class="view active">
-  <h1>HYOGO PARTS 出荷検品</h1>
-  <label class="label">社員番号</label>
-  <input id="staffCodeInput" class="input big" inputmode="numeric" pattern="[0-9]*" autocomplete="off">
-  <button id="loginBtn" class="btn primary">開始</button>
-  <p id="loginMsg" class="msg"></p>
-</section>
+:root{--bg:#f4f5f7;
+--card:#fff;
+--text:#111827;
+--muted:#6b7280;
+--line:#d1d5db;
+--primary:#0f766e;
+--danger:#b91c1c;
+--ok:#047857;
+--hold:#b45309}
+*{box-sizing:border-box}body{margin:0;
+background:var(--bg);color:var(--text);
+font-family:-apple-system,BlinkMacSystemFont,"Helvetica Neue",Arial,sans-serif}
+#app{
+  max-width:520px;
+  margin:0 auto;
+  padding:8px;
+}
+.view{display:none;background:var(--card);
+min-height:calc(100vh - 28px);
+padding:8px;
+border-radius:14px;
+box-shadow:0 4px 16px #0001}
+.view.active{display:block}h1{margin:0 0 20px;
+font-size:28px}
+.label,.small{display:block;
+color:var(--muted);font-size:14px;margin-bottom:6px;
+}
+.input{width:100%;border:2px solid var(--line);
+border-radius:12px;
+padding:12px;
+font-size:20px;
+margin-bottom:12px;
+}
+.input.big{font-size:30px;height:58px;
+}
+.btn{
+  display:block;
+  width:100%;
+  min-height:39px;
+  border:0;
+  border-radius:12px;
+  background:#e5e7eb;
+  color:var(--text);
+  font-size:19px;
+  font-weight:700;
+  margin:2px 0;
+}
+.btn.primary{background:var(--primary);color:white}
+.btn.danger{background:var(--danger);color:white}
+.msg{min-height:24px;font-size:16px;color:var(--danger);font-weight:700}
+.note{color:var(--muted)}.fileLabel{display:block;padding:12px;background:#f9fafb;border:1px solid var(--line);border-radius:12px;margin:10px 0;font-weight:700}
+.fileLabel input{display:block;margin-top:8px;width:100%}
+.loadedList{background:#f9fafb;border:1px solid var(--line);border-radius:12px;padding:12px;margin:12px 0}
+.loadedList ul{margin:8px 0 0;padding-left:20px}
+.loadedList li{margin:4px 0;font-weight:700}.staff{font-size:18px;font-weight:700}
+.header{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:8px 12px;
+  border-bottom:1px solid var(--line);
+  padding-bottom:8px;
+  margin-bottom:10px;
+}
 
-<section id="loadView" class="view">
-  <h1>CSV読込</h1>
-  <p class="note">PCで作成した検品用CSVを1つだけ選択してください。</p>
-  <label class="fileLabel">inspection_bundle.csv
-    <input id="bundleFile" type="file" accept=".csv,text/csv">
-  </label>
-  <div class="loadedList">
-    <div class="small">選択されたCSV</div>
-    <ul id="loadedCsvList"><li>未選択</li></ul>
-  </div>
-  <button id="loadCsvBtn" class="btn primary">検品開始</button>
-  <p id="loadMsg" class="msg"></p>
-</section>
+.header > div:nth-child(3){
+  grid-column:1 / -1;
+  padding-top:4px;
+}
 
-<section id="scanInvoiceView" class="view">
-  <h1>送り状読込</h1>
-  <p id="staffNameLabel" class="staff"></p>
-  <button id="changeStaffBtn" class="btn smallBtn">作業者変更</button>
-  <label class="label">送り状No</label>
-  <input
-    id="invoiceInput"
-    class="input big"
-    type="text"
-    inputmode="text"
-    autocomplete="off"
-    autocorrect="off"
-    autocapitalize="off"
-    spellcheck="false"
-  >
-  <button id="invoiceSearchBtn" class="btn primary">表示</button>
-  <button id="reloadBtn" class="btn">CSV再読込</button>
-  <p id="invoiceMsg" class="msg"></p>
-</section>
+.header > div:nth-child(3) .small{
+  display:none;
+}
 
-<section id="orderView" class="view">
-  <header class="header">
-  <div>
-    <div class="small">送り状No</div>
-    <div id="orderInvoice" class="strong"></div>
-  </div>
+.header > div:nth-child(3) .strong::before{
+  content:"氏名：";
+  font-size:16px;
+  font-weight:700;
+}
 
-  <div>
-    <div class="small">注文番号</div>
-    <div id="orderNo" class="strong"></div>
-  </div>
+.header .small{
+  margin-bottom:2px;
+}
 
-  <div>
-    <div class="small">氏名</div>
-    <div id="orderShipName" class="strong"></div>
-  </div>
-</header>
-  <p id="orderStaffLabel" class="staff"></p>
-  <button id="changeStaffBtnOrder" class="btn smallBtn">作業者変更</button>
-  <div id="progressLabel" class="progress"></div>
-  <div id="itemList" class="itemList"></div>
-  <button id="startInspectionBtn" class="btn primary">検品開始</button>
-  <button id="backToInvoiceBtn" class="btn">送り状読込へ戻る</button>
-</section>
+.header .strong{
+  font-size:24px;
+  font-weight:900;
+}
+.strong{font-size:20px;font-weight:800}
+.progress{background:#ecfeff;border:1px solid #99f6e4;padding:12px;border-radius:12px;margin:14px 0;font-weight:800}
+.itemRow{padding:12px;border:1px solid var(--line);border-radius:12px;margin-bottom:10px;background:#fff}.itemRow .state{font-weight:900}
+.itemRow.ok{border-color:var(--ok)}.itemRow.hold{border-color:var(--hold)}
+.imageWrap{height:280px;border:1px solid var(--line);border-radius:16px;background:#f9fafb;display:flex;align-items:center;justify-content:center;overflow:hidden}
+.imageWrap img{
+  width:auto;
+  height:100%;
+}
+.noImage{color:var(--muted);
+font-size:24px;
+font-weight:800;
+}
+.sku{font-size:28px;
+font-weight:900;
+margin-top:0;
+margin-bottom:0;
+}
+.qty{font-size:28px;
+font-weight:900;
+margin-top:0;
+margin-bottom:0;
+}
+.itemName{
+  font-size:14px;
+  line-height:1.15;
+  margin:4px 0;
+  max-height:38px;
+  overflow:hidden;
+}
+.readBox{
+  border-top:1px solid var(--line);
+  border-bottom:1px solid var(--line);
+  padding:2px 0;
+  margin:2px 0;
+}
 
-<section id="itemView" class="view">
-<div class="itemInfoBox">
-  <div><strong>送り状No：</strong><span id="itemInvoice"></span></div>
-  <div><strong>注文番号：</strong><span id="itemOrderNo"></span></div>
-  <div><strong>氏名：</strong><span id="itemShipName"></span></div>
-</div>
-  <div class="imageWrap"><img id="itemImage" alt="商品画像"><div id="noImage" class="noImage">画像なし</div></div>
-  <div id="itemSku" class="sku"></div>
-  <div id="itemQty" class="qty"></div>
-  <div id="itemName" class="itemName"></div>
-  <p id="itemStaffLabel" class="staff smallStaff"></p>
-  <button id="changeStaffBtnItem" class="btn smallBtn">作業者変更</button>
-  <div class="readBox"><div class="small">読取値</div><div id="readValue" class="readValue">スキャン待機中</div></div>
-  <input id="barcodeInput" class="hiddenInput" autocomplete="off">
-  <p id="itemMsg" class="msg"></p>
-  <div id="quantityPanel" class="quantityPanel hidden">
-    <div class="small">数量確認</div>
-    <div class="needed">必要数量：<span id="neededQty"></span></div>
-    <input id="checkedQtyInput" class="input qtyInput" inputmode="numeric" pattern="[0-9]*" autocomplete="off" placeholder="確認数量">
-    <div class="keypad">
-      <button data-key="1">1</button><button data-key="2">2</button><button data-key="3">3</button>
-      <button data-key="4">4</button><button data-key="5">5</button><button data-key="6">6</button>
-      <button data-key="7">7</button><button data-key="8">8</button><button data-key="9">9</button>
-      <button data-key="clear">C</button><button data-key="0">0</button><button data-key="back">←</button>
-    </div>
-    <button id="confirmQtyBtn" class="btn primary">確定</button>
-  </div>
-  <button id="manualBtn" class="btn">手動確認</button>
-  <button id="holdBtn" class="btn danger">保留</button>
-  <button id="toOrderBtn" class="btn">一覧へ戻る</button>
-</section>
+.hidden{display:none!important}
+.quantityPanel{border:2px solid var(--primary);
+padding:12px;border-radius:14px;
+margin:12px 0;
+}
+.needed{font-size:24px;
+font-weight:900;
+margin-bottom:8px}
 
-<section id="completeView" class="view">
-  <h1 id="completeTitle">検品完了</h1>
-  <p id="completeSummary" class="summary"></p>
-  <button id="saveResultBtn" class="btn primary">保存</button>
-  <p id="saveMsg" class="msg"></p>
-  <button id="nextInvoiceBtn" class="btn hidden">次の送り状へ</button>
-</section>
-</main>
+.qtyInput{text-align:center;
+font-size:28px;
+font-weight:900;
+}
+.keypad{display:grid;
+grid-template-columns:repeat(3,1fr);
+gap:8px}
 
-<div id="modal" class="modal hidden">
-  <div class="modalCard">
-    <h2 id="modalTitle"></h2>
-    <div id="modalBody"></div>
-    <div id="modalActions" class="modalActions"></div>
-  </div>
-</div>
-<script src="./app.js"></script>
-</body>
-</html>
+.keypad button{min-height:46px;
+border:0;border-radius:10px;
+background:#e5e7eb;
+font-size:22px;font-weight:900;
+}
+
+.summary{white-space:pre-line;
+font-size:18px;
+line-height:1.6}
+
+.modal{position:fixed;inset:0;
+background:#0007;
+display:flex;align-items:center;
+justify-content:center;padding:16px}
+
+.modalCard{width:100%;max-width:480px;
+background:white;border-radius:18px;
+padding:18px}
+
+.modalCard h2{margin-top:0}
+
+.modalActions .qtyModalSku {
+  font-size: 24px;
+  font-weight: 900;
+  margin-bottom: 4px;
+}
+.qtyModalName {
+  font-size: 15px;
+  color: var(--muted);
+  max-height: 40px;
+  overflow: hidden;
+  margin-bottom: 10px;
+}
+.qtyModalNeed {
+  font-size: 26px;
+  font-weight: 900;
+  margin: 8px 0 10px;
+}
+.qtyModal .qtyInput {
+  height: 58px;
+  margin-bottom: 10px;
+}
+.qtyModal .keypad {
+  margin-bottom: 8px;
+}
+.qtyModal .keypad button {
+  min-height: 42px;
+}
+
+/* v8 status visibility */
+.progress {
+  background: transparent;
+  border: 0;
+  padding: 0;
+}
+.progressChips {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 8px;
+  margin: 14px 0;
+}
+.chip {
+  display: block;
+  text-align: center;
+  padding: 10px 4px;
+  border-radius: 12px;
+  font-weight: 900;
+  border: 2px solid transparent;
+}
+.chip.pending {
+  background: #f3f4f6;
+  border-color: #d1d5db;
+}
+.chip.ok {
+  background: #dcfce7;
+  border-color: #16a34a;
+  color: #14532d;
+}
+.chip.hold {
+  background: #fee2e2;
+  border-color: #dc2626;
+  color: #7f1d1d;
+}
+.itemRow.pending {
+  background: #f9fafb;
+  border-color: #d1d5db;
+}
+.itemRow.ok {
+  background: #dcfce7;
+  border-color: #16a34a;
+}
+.itemRow.hold {
+  background: #fee2e2;
+  border-color: #dc2626;
+}
+.itemRow.ok .state {
+  color: #14532d;
+}
+.itemRow.hold .state {
+  color: #7f1d1d;
+}
+
+.smallBtn {
+  min-height: 34px;
+  font-size: 16px;
+  margin: 2px 0;
+}
+.smallStaff {
+  margin: 0;
+  font-size: 12px;
+}
+.hiddenInput{
+  position:fixed;
+  left:-9999px;
+  top:-9999px;
+  width:1px;
+  height:1px;
+  opacity:0;
+  pointer-events:none;
+}
+/* 読取値エリアの空白削減 */
+.readBox{
+  padding:2px 0 !important;
+  margin:2px 0 !important;
+}
+
+.readValue{
+  font-size:18px;
+  line-height:1.05;
+  min-height:22px;
+}
+
+/* 読取値の下のボタン間隔を詰める */
+#manualBtn{
+  margin-top:2px !important;
+}
+
+
+#itemMsg{
+  min-height:0;
+  margin:0;
+  padding:0;
+}
+#quantityPanel.hidden{
+  display:none !important;
+  height:0 !important;
+  margin:0 !important;
+  padding:0 !important;
+  border:0 !important;
+}
+html, body{
+  height:100%;
+  overflow:hidden;
+  overscroll-behavior:none;
+}
+
+#app{
+  height:100dvh;
+  overflow-y:auto;
+  -webkit-overflow-scrolling:touch;
+}
+
+.itemInfoBox{
+  font-size:16px;
+  line-height:1.2;
+  margin-bottom:4px;
+}
+
+.itemInfoBox div{
+  margin:0;
+  padding:0;
+}
