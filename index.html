@@ -90,7 +90,16 @@
   <p id="itemStaffLabel" class="staff smallStaff"></p>
   <button id="changeStaffBtnItem" class="btn smallBtn">作業者変更</button>
   <div class="readBox"><div class="small">読取値</div><div id="readValue" class="readValue">スキャン待機中</div></div>
-  <input id="barcodeInput" class="hiddenInput" autocomplete="off">
+  <input
+  id="barcodeInput"
+  class="hiddenInput"
+  type="text"
+  inputmode="text"
+  autocomplete="off"
+  autocorrect="off"
+  autocapitalize="off"
+  spellcheck="false"
+>
   <p id="itemMsg" class="msg"></p>
   <div id="quantityPanel" class="quantityPanel hidden">
     <div class="small">数量確認</div>
