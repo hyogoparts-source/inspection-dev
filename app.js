@@ -511,17 +511,18 @@ function renderComplete(){
   }
 
   $("completeTitle").textContent=hold?"保留":"検品完了";
-$("completeSummary").textContent=
-  `送り状No：${state.currentInvoice}\n注文番号：${items[0]?.order_no||""}\n商品数：${items.length}\nOK：${ok}\n保留：${hold}\n未検品：${pending}`;
+  $("completeSummary").textContent=
+    `送り状No：${state.currentInvoice}\n注文番号：${items[0]?.order_no||""}\n商品数：${items.length}\nOK：${ok}\n保留：${hold}\n未検品：${pending}`;
 
-/* 完了画面を開くたびに保存ボタン状態を初期化 */
-$("saveResultBtn").disabled = false;
-$("saveResultBtn").textContent = "保存";
-$("nextInvoiceBtn").disabled = true;
-$("nextInvoiceBtn").classList.add("hidden");
-$("saveMsg").textContent = "";
+  /* 完了画面を開くたびに保存ボタン状態を初期化 */
+  $("saveResultBtn").disabled = false;
+  $("saveResultBtn").textContent = "保存";
+  $("nextInvoiceBtn").disabled = true;
+  $("nextInvoiceBtn").classList.add("hidden");
+  $("saveMsg").textContent = "";
 
-show("completeView");
+  show("completeView");
+}
 
 function buildResultCsv(){
   const completedAt=nowText();
@@ -569,7 +570,6 @@ function buildResultCsv(){
   ].join("\r\n");
 }
 
-function downloadCsv(){const csv="\uFEFF"+buildResultCsv();
 function downloadCsv(){
   const csv="\uFEFF"+buildResultCsv();
   const d=new Date(),p=n=>String(n).padStart(2,"0");
