@@ -570,16 +570,30 @@ function buildResultCsv(){
 }
 
 function downloadCsv(){const csv="\uFEFF"+buildResultCsv();
-const d=new Date(),p=n=>String(n).padStart(2,"0");
-const name=`inspection_result_${d.getFullYear()}${p(d.getMonth()+1)}${p(d.getDate())}_${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}.csv`;
-const blob=new Blob([csv],{type:"text/csv;charset=utf-8"}),url=URL.createObjectURL(blob),a=document.createElement("a");
-a.href=url;a.download=name;document.body.appendChild(a);
-a.click();a.remove();URL.revokeObjectURL(url);showMsg("saveMsg","保存しました。次の送り状へ進んでください。",true);
-$("saveResultBtn").disabled = true;
-$("saveResultBtn").textContent = "保存済み";
-$("nextInvoiceBtn").disabled = false;
+function downloadCsv(){
+  const csv="\uFEFF"+buildResultCsv();
+  const d=new Date(),p=n=>String(n).padStart(2,"0");
+  const name=`inspection_result_${d.getFullYear()}${p(d.getMonth()+1)}${p(d.getDate())}_${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}.csv`;
 
-$("nextInvoiceBtn").classList.remove("hidden")}
+  const blob=new Blob([csv],{type:"text/csv;charset=utf-8"});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement("a");
+
+  a.href=url;
+  a.download=name;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+
+  showMsg("saveMsg","保存しました。次の送り状へ進んでください。",true);
+
+  $("saveResultBtn").disabled = true;
+  $("saveResultBtn").textContent = "保存済み";
+
+  $("nextInvoiceBtn").disabled = false;
+  $("nextInvoiceBtn").classList.remove("hidden");
+}
 
 $("loginBtn").onclick=()=>{const code=$("staffCodeInput").value.trim();if(!code)return showMsg("loginMsg","社員番号を入力してください");state.pendingStaffCode=code;show("loadView")};
 $("bundleFile").addEventListener("change",renderLoadedCsvList);
