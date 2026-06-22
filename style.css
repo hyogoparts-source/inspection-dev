@@ -86,10 +86,26 @@ margin-bottom:12px;
   font-weight:900;
 }
 .strong{font-size:20px;font-weight:800}
-.progress{background:#ecfeff;border:1px solid #99f6e4;padding:12px;border-radius:12px;margin:14px 0;font-weight:800}
-.itemRow{padding:12px;border:1px solid var(--line);border-radius:12px;margin-bottom:10px;background:#fff}.itemRow .state{font-weight:900}
-.itemRow.ok{border-color:var(--ok)}.itemRow.hold{border-color:var(--hold)}
-.imageWrap{height:280px;border:1px solid var(--line);border-radius:16px;background:#f9fafb;display:flex;align-items:center;justify-content:center;overflow:hidden}
+.progress{background:#ecfeff;
+border:1px solid #99f6e4;padding:12px;
+border-radius:12px;margin:14px 0;
+font-weight:800}
+.itemRow{padding:12px;
+border:1px solid var(--line);border-radius:12px;
+margin-bottom:10px;
+background:#fff}
+
+.itemRow .state{font-weight:900}
+.itemRow.ok{border-color:var(--ok)}
+.itemRow.hold{border-color:var(--hold)}
+.imageWrap{height:280px;
+border:1px solid var(--line);
+border-radius:16px;
+background:#f9fafb;display:flex;
+align-items:center;
+justify-content:center;
+overflow:hidden}
+
 .imageWrap img{
   width:auto;
   height:100%;
@@ -160,7 +176,7 @@ padding:18px}
 
 .modalCard h2{margin-top:0}
 
-.modalActions .qtyModalSku {
+.qtyModalSku {
   font-size: 24px;
   font-weight: 900;
   margin-bottom: 4px;
