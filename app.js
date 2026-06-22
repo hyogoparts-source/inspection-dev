@@ -511,10 +511,17 @@ function renderComplete(){
   }
 
   $("completeTitle").textContent=hold?"保留":"検品完了";
-  $("completeSummary").textContent=
-    `送り状No：${state.currentInvoice}\n注文番号：${items[0]?.order_no||""}\n商品数：${items.length}\nOK：${ok}\n保留：${hold}\n未検品：${pending}`;
-  show("completeView");
-}
+$("completeSummary").textContent=
+  `送り状No：${state.currentInvoice}\n注文番号：${items[0]?.order_no||""}\n商品数：${items.length}\nOK：${ok}\n保留：${hold}\n未検品：${pending}`;
+
+/* 完了画面を開くたびに保存ボタン状態を初期化 */
+$("saveResultBtn").disabled = false;
+$("saveResultBtn").textContent = "保存";
+$("nextInvoiceBtn").disabled = true;
+$("nextInvoiceBtn").classList.add("hidden");
+$("saveMsg").textContent = "";
+
+show("completeView");
 
 function buildResultCsv(){
   const completedAt=nowText();
@@ -562,7 +569,17 @@ function buildResultCsv(){
   ].join("\r\n");
 }
 
-function downloadCsv(){const csv="\uFEFF"+buildResultCsv();const d=new Date(),p=n=>String(n).padStart(2,"0");const name=`inspection_result_${d.getFullYear()}${p(d.getMonth()+1)}${p(d.getDate())}_${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}.csv`;const blob=new Blob([csv],{type:"text/csv;charset=utf-8"}),url=URL.createObjectURL(blob),a=document.createElement("a");a.href=url;a.download=name;document.body.appendChild(a);a.click();a.remove();URL.revokeObjectURL(url);showMsg("saveMsg","保存しました。次の送り状へ進んでください。",true);$("nextInvoiceBtn").classList.remove("hidden")}
+function downloadCsv(){const csv="\uFEFF"+buildResultCsv();
+const d=new Date(),p=n=>String(n).padStart(2,"0");
+const name=`inspection_result_${d.getFullYear()}${p(d.getMonth()+1)}${p(d.getDate())}_${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}.csv`;
+const blob=new Blob([csv],{type:"text/csv;charset=utf-8"}),url=URL.createObjectURL(blob),a=document.createElement("a");
+a.href=url;a.download=name;document.body.appendChild(a);
+a.click();a.remove();URL.revokeObjectURL(url);showMsg("saveMsg","保存しました。次の送り状へ進んでください。",true);
+$("saveResultBtn").disabled = true;
+$("saveResultBtn").textContent = "保存済み";
+$("nextInvoiceBtn").disabled = false;
+
+$("nextInvoiceBtn").classList.remove("hidden")}
 
 $("loginBtn").onclick=()=>{const code=$("staffCodeInput").value.trim();if(!code)return showMsg("loginMsg","社員番号を入力してください");state.pendingStaffCode=code;show("loadView")};
 $("bundleFile").addEventListener("change",renderLoadedCsvList);
