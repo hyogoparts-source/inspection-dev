@@ -371,11 +371,21 @@ html, body{
 .btn:disabled {
   background: #d1d5db !important;
   color: #6b7280 !important;
-  opacity: 1;
+  opacity: 1 !important;
 }
 
-/* 次の送り状へを有効化した時は緑 */
-#nextInvoiceBtn.primary:not(:disabled) {
-  background: var(--primary);
-  color: white;
+/* 保存後：保存済みボタンは必ずグレー */
+#saveResultBtn.saved,
+#saveResultBtn.saved:disabled {
+  background: #d1d5db !important;
+  color: #6b7280 !important;
+  opacity: 1 !important;
+}
+
+/* 保存後：次の送り状へボタンは必ず緑 */
+#nextInvoiceBtn.ready,
+#nextInvoiceBtn.ready:not(:disabled) {
+  background: var(--primary) !important;
+  color: #ffffff !important;
+  opacity: 1 !important;
 }
