@@ -81,20 +81,22 @@ function focusBarcodeInput(){
 
   input.value = "";
 
-  // まず即時フォーカス
+  // すぐフォーカス
   input.focus();
 
-  // iPhone Safari / AsReader 対策で少し遅れてもう一度フォーカス
-  setTimeout(() => {
-    input.focus();
-    if($("readValue")){
-      $("readValue").textContent = "スキャン待機中";
-    }
-  }, 100);
+  if($("readValue")){
+    $("readValue").textContent = "スキャン待機中";
+  }
 
+  // 画面描画直後にもう一度フォーカス
+  requestAnimationFrame(() => {
+    input.focus();
+  });
+
+  // AsReader / iPhone Safari 用の保険。待ち時間を短めにする
   setTimeout(() => {
     input.focus();
-  }, 300);
+  }, 50);
 }
 function nowText(){const d=new Date(),p=n=>String(n).padStart(2,"0");
 return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`}
@@ -558,8 +560,12 @@ function renderComplete(){
   /* 完了画面を開くたびに保存ボタン状態を初期化 */
   $("saveResultBtn").disabled = false;
   $("saveResultBtn").textContent = "保存";
+  $("saveResultBtn").classList.add("primary");
+
   $("nextInvoiceBtn").disabled = true;
   $("nextInvoiceBtn").classList.add("hidden");
+  $("nextInvoiceBtn").classList.remove("primary");
+
   $("saveMsg").textContent = "";
 
   show("completeView");
@@ -617,17 +623,23 @@ function downloadCsv(){
   const name=`inspection_result_${d.getFullYear()}${p(d.getMonth()+1)}${p(d.getDate())}_${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}.csv`;
 
   /*
-    iPhone Safari対策：
-    ダウンロード確認が出る前に、先に画面状態を変更する
+    先に画面状態を変更する。
+    iPhone Safariのダウンロード確認が出る前に、
+    保存済み・次の送り状へボタンを反映させるため。
   */
   showMsg("saveMsg","保存しました。次の送り状へ進んでください。",true);
 
+  // 保存ボタン：グレーの「保存済み」
   $("saveResultBtn").disabled = true;
   $("saveResultBtn").textContent = "保存済み";
+  $("saveResultBtn").classList.remove("primary");
 
+  // 次の送り状へ：表示して緑にする
   $("nextInvoiceBtn").disabled = false;
   $("nextInvoiceBtn").classList.remove("hidden");
+  $("nextInvoiceBtn").classList.add("primary");
 
+  // ここから下でダウンロード開始
   const blob=new Blob([csv],{type:"text/csv;charset=utf-8"});
   const url=URL.createObjectURL(blob);
   const a=document.createElement("a");
@@ -671,8 +683,24 @@ if($("changeStaffBtn")) $("changeStaffBtn").onclick=showChangeStaffModal;
 if($("changeStaffBtnOrder")) $("changeStaffBtnOrder").onclick=showChangeStaffModal;
 if($("changeStaffBtnItem")) $("changeStaffBtnItem").onclick=showChangeStaffModal;
 
-function clearInvoiceInput(){
-  focusInvoiceInput();
+function focusInvoiceInput(){
+  const input = $("invoiceInput");
+  if(!input) return;
+
+  input.value = "";
+
+  input.focus();
+  input.select();
+
+  requestAnimationFrame(() => {
+    input.focus();
+    input.select();
+  });
+
+  setTimeout(() => {
+    input.focus();
+    input.select();
+  }, 50);
 }
 
 $("invoiceSearchBtn").onclick=()=>{
