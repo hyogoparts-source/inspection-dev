@@ -43,28 +43,6 @@ function showChangeStaffModal(){
   setTimeout(()=>$("changeStaffCodeInput")?.focus(),100);
 }
 
-function focusInvoiceInput(){
-  const input = $("invoiceInput");
-  if(!input) return;
-
-  input.value = "";
-
-  // まず即時フォーカス
-  input.focus();
-  input.select();
-
-  // iPhone Safari / AsReader 対策で少し遅れて再フォーカス
-  setTimeout(() => {
-    input.focus();
-    input.select();
-  }, 100);
-
-  setTimeout(() => {
-    input.focus();
-    input.select();
-  }, 300);
-}
-
 function resetInvoiceScreen(){
   const msg = $("invoiceMsg");
 
@@ -156,7 +134,16 @@ function renderOrder(){
       <div>${r.item_name||""}</div>
     </div>`;
   }).join("");
-  document.querySelectorAll(".itemRow").forEach(el=>el.onclick=()=>{state.currentIndex=Number(el.dataset.idx);renderItem()});
+  document.querySelectorAll(".itemRow").forEach(el=>{
+  el.addEventListener("pointerdown", ()=>{
+    focusBarcodeInput();
+  });
+
+  el.onclick=()=>{
+    state.currentIndex=Number(el.dataset.idx);
+    renderItem();
+  };
+});
   show("orderView");
 }
 
@@ -231,6 +218,14 @@ function markHold(r,reason,memo=""){
 }
 
 function handleBarcode(raw){
+  const activeView = document.querySelector(".view.active");
+
+  // 商品詳細画面以外では、商品バーコードとして処理しない
+  if(!activeView || activeView.id !== "itemView"){
+    if($("barcodeInput")) $("barcodeInput").value = "";
+    return;
+  }
+
   const r = state.currentItems[state.currentIndex];
   const read = normalizeBarcode(raw);
 
@@ -340,10 +335,10 @@ function showAdminRegister(r,read,master){
     ]
   );
 
+
+
   setTimeout(()=>$("adminCodeInput")?.focus(),100);
 }
-
-
 
 function showNoBarcodeRegister(r, read){
   showModal(
@@ -484,8 +479,8 @@ function showQuantityModalForNoBarcode(r, read){
     };
   });
 
-  setTimeout(()=>$("modalQtyInput")?.focus(),100);
-}
+   setTimeout(()=>$("modalQtyInput")?.focus(),100);
+} 
 
 function showQuantityModal(r){
   const need = String(Number(r.quantity || 0));
@@ -533,9 +528,9 @@ function showQuantityModal(r){
       else input.value += k;
     };
   });
+
   setTimeout(()=>$("modalQtyInput")?.focus(),100);
 }
-
 function showHoldModal(r){const reasons=["数量不足","商品バーコード不明","商品なし","送り状修正","その他"];showModal("保留理由",`<div>${reasons.map(x=>`<button class="btn holdReason" data-r="${x}">${x}</button>`).join("")}<textarea id="holdMemo" class="input" placeholder="メモ"></textarea></div>`,[{label:"キャンセル",onClick:()=>{closeModal();}}]);document.querySelectorAll(".holdReason").forEach(btn=>btn.onclick=()=>{markHold(r,btn.dataset.r,$("holdMemo").value||"");closeModal();renderOrder()})}
 function renderComplete(){
   const items=state.currentItems;
@@ -561,10 +556,12 @@ function renderComplete(){
   $("saveResultBtn").disabled = false;
   $("saveResultBtn").textContent = "保存";
   $("saveResultBtn").classList.add("primary");
+  $("saveResultBtn").classList.remove("saved");
 
   $("nextInvoiceBtn").disabled = true;
   $("nextInvoiceBtn").classList.add("hidden");
   $("nextInvoiceBtn").classList.remove("primary");
+  $("nextInvoiceBtn").classList.remove("ready");
 
   $("saveMsg").textContent = "";
 
@@ -633,11 +630,13 @@ function downloadCsv(){
   $("saveResultBtn").disabled = true;
   $("saveResultBtn").textContent = "保存済み";
   $("saveResultBtn").classList.remove("primary");
+  $("saveResultBtn").classList.add("saved");
 
   // 次の送り状へ：表示して緑にする
   $("nextInvoiceBtn").disabled = false;
   $("nextInvoiceBtn").classList.remove("hidden");
   $("nextInvoiceBtn").classList.add("primary");
+  $("nextInvoiceBtn").classList.add("ready");
 
   // ここから下でダウンロード開始
   const blob=new Blob([csv],{type:"text/csv;charset=utf-8"});
@@ -701,6 +700,10 @@ function focusInvoiceInput(){
     input.focus();
     input.select();
   }, 50);
+}
+
+function clearInvoiceInput(){
+  focusInvoiceInput();
 }
 
 $("invoiceSearchBtn").onclick=()=>{
@@ -822,6 +825,10 @@ function showAdminReinspection(inv){
   setTimeout(()=>$("reinspectAdminCodeInput")?.focus(),100);
 }
 
+
+$("startInspectionBtn").addEventListener("pointerdown", ()=>{
+  focusBarcodeInput();
+});
 
 $("startInspectionBtn").onclick=()=>{
   const i=firstPendingIndex();
