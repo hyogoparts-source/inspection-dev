@@ -14,7 +14,15 @@
   <h1>HYOGO PARTS 出荷検品</h1>
   <label class="label">社員番号</label>
   <input id="staffCodeInput" class="input big" inputmode="numeric" pattern="[0-9]*" autocomplete="off">
-  <button id="loginBtn" class="btn primary">開始</button>
+
+<div class="keypad staffKeypad">
+  <button data-staffkey="1">1</button><button data-staffkey="2">2</button><button data-staffkey="3">3</button>
+  <button data-staffkey="4">4</button><button data-staffkey="5">5</button><button data-staffkey="6">6</button>
+  <button data-staffkey="7">7</button><button data-staffkey="8">8</button><button data-staffkey="9">9</button>
+  <button data-staffkey="clear">C</button><button data-staffkey="0">0</button><button data-staffkey="back">←</button>
+</div>
+
+<button id="loginBtn" class="btn primary">開始</button>
   <p id="loginMsg" class="msg"></p>
 </section>
 
