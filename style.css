@@ -366,3 +366,16 @@ html, body{
   min-height: 46px;
   font-size: 22px;
 }
+
+/* 無効ボタンはグレー表示 */
+.btn:disabled {
+  background: #d1d5db !important;
+  color: #6b7280 !important;
+  opacity: 1;
+}
+
+/* 次の送り状へを有効化した時は緑 */
+#nextInvoiceBtn.primary:not(:disabled) {
+  background: var(--primary);
+  color: white;
+}
