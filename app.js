@@ -616,6 +616,18 @@ function downloadCsv(){
   const d=new Date(),p=n=>String(n).padStart(2,"0");
   const name=`inspection_result_${d.getFullYear()}${p(d.getMonth()+1)}${p(d.getDate())}_${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}.csv`;
 
+  /*
+    iPhone Safari対策：
+    ダウンロード確認が出る前に、先に画面状態を変更する
+  */
+  showMsg("saveMsg","保存しました。次の送り状へ進んでください。",true);
+
+  $("saveResultBtn").disabled = true;
+  $("saveResultBtn").textContent = "保存済み";
+
+  $("nextInvoiceBtn").disabled = false;
+  $("nextInvoiceBtn").classList.remove("hidden");
+
   const blob=new Blob([csv],{type:"text/csv;charset=utf-8"});
   const url=URL.createObjectURL(blob);
   const a=document.createElement("a");
@@ -625,15 +637,10 @@ function downloadCsv(){
   document.body.appendChild(a);
   a.click();
   a.remove();
-  URL.revokeObjectURL(url);
 
-  showMsg("saveMsg","保存しました。次の送り状へ進んでください。",true);
-
-  $("saveResultBtn").disabled = true;
-  $("saveResultBtn").textContent = "保存済み";
-
-  $("nextInvoiceBtn").disabled = false;
-  $("nextInvoiceBtn").classList.remove("hidden");
+  setTimeout(()=>{
+    URL.revokeObjectURL(url);
+  },1000);
 }
 
 $("loginBtn").onclick=()=>{const code=$("staffCodeInput").value.trim();if(!code)return showMsg("loginMsg","社員番号を入力してください");state.pendingStaffCode=code;show("loadView")};
