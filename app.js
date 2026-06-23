@@ -145,6 +145,16 @@ function renderOrder(){
   };
 });
   show("orderView");
+
+  // 商品一覧画面の時点で、商品バーコード入力欄を先に起こしておく
+  // AsReaderのPlugged待ち時間を商品詳細画面に入る前に済ませるため
+   setTimeout(() => {
+  focusBarcodeInput();
+}, 30);
+
+setTimeout(() => {
+  focusBarcodeInput();
+}, 80);
 }
 
 function firstPendingIndex(){return state.currentItems.findIndex(r=>statusOf(r)==="未検品")}
@@ -395,6 +405,8 @@ function showNoBarcodeRegister(r, read){
 }
 
 function showQuantityModalForNoBarcode(r, read){
+  if(document.activeElement) document.activeElement.blur();
+
   const need = String(Number(r.quantity || 0));
 
   showModal("数量確認",
@@ -402,7 +414,7 @@ function showQuantityModalForNoBarcode(r, read){
       <div class="qtyModalSku">${r.sku}</div>
       <div class="qtyModalName">${r.item_name || ""}</div>
       <div class="qtyModalNeed">必要数量：${need}</div>
-      <input id="modalQtyInput" class="input qtyInput" inputmode="numeric" pattern="[0-9]*" autocomplete="off" placeholder="確認数量">
+      <input id="modalQtyInput" class="input qtyInput" inputmode="numeric" pattern="[0-9]*" autocomplete="off" placeholder="確認数量" readonly>
       <div class="keypad">
         <button data-mkey="1">1</button><button data-mkey="2">2</button><button data-mkey="3">3</button>
         <button data-mkey="4">4</button><button data-mkey="5">5</button><button data-mkey="6">6</button>
@@ -478,18 +490,18 @@ function showQuantityModalForNoBarcode(r, read){
       else input.value += k;
     };
   });
-
-   setTimeout(()=>$("modalQtyInput")?.focus(),100);
 } 
 
 function showQuantityModal(r){
+  if(document.activeElement) document.activeElement.blur();
+
   const need = String(Number(r.quantity || 0));
   showModal("数量確認",
     `<div class="qtyModal">
       <div class="qtyModalSku">${r.sku}</div>
       <div class="qtyModalName">${r.item_name || ""}</div>
       <div class="qtyModalNeed">必要数量：${need}</div>
-      <input id="modalQtyInput" class="input qtyInput" inputmode="numeric" pattern="[0-9]*" autocomplete="off" placeholder="確認数量">
+      <input id="modalQtyInput" class="input qtyInput" inputmode="numeric" pattern="[0-9]*" autocomplete="off" placeholder="確認数量" readonly>
       <div class="keypad">
         <button data-mkey="1">1</button><button data-mkey="2">2</button><button data-mkey="3">3</button>
         <button data-mkey="4">4</button><button data-mkey="5">5</button><button data-mkey="6">6</button>
@@ -528,9 +540,8 @@ function showQuantityModal(r){
       else input.value += k;
     };
   });
-
-  setTimeout(()=>$("modalQtyInput")?.focus(),100);
 }
+
 function showHoldModal(r){const reasons=["数量不足","商品バーコード不明","商品なし","送り状修正","その他"];showModal("保留理由",`<div>${reasons.map(x=>`<button class="btn holdReason" data-r="${x}">${x}</button>`).join("")}<textarea id="holdMemo" class="input" placeholder="メモ"></textarea></div>`,[{label:"キャンセル",onClick:()=>{closeModal();}}]);document.querySelectorAll(".holdReason").forEach(btn=>btn.onclick=()=>{markHold(r,btn.dataset.r,$("holdMemo").value||"");closeModal();renderOrder()})}
 function renderComplete(){
   const items=state.currentItems;
@@ -688,18 +699,26 @@ function focusInvoiceInput(){
 
   input.value = "";
 
+  // すぐフォーカス
   input.focus();
   input.select();
 
+  // 画面描画直後にもう一度フォーカス
   requestAnimationFrame(() => {
     input.focus();
     input.select();
   });
 
+  // AsReader / iPhone Safari 用の保険
   setTimeout(() => {
     input.focus();
     input.select();
-  }, 50);
+  }, 30);
+
+  setTimeout(() => {
+    input.focus();
+    input.select();
+  }, 80);
 }
 
 function clearInvoiceInput(){
