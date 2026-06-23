@@ -42,25 +42,39 @@ function showChangeStaffModal(){
   );
   setTimeout(()=>$("changeStaffCodeInput")?.focus(),100);
 }
-function resetInvoiceScreen(){
-  const input = $("invoiceInput");
-  const msg = $("invoiceMsg");
 
-  if(input){
-    input.value = "";
-  }
+function focusInvoiceInput(){
+  const input = $("invoiceInput");
+  if(!input) return;
+
+  input.value = "";
+
+  // まず即時フォーカス
+  input.focus();
+  input.select();
+
+  // iPhone Safari / AsReader 対策で少し遅れて再フォーカス
+  setTimeout(() => {
+    input.focus();
+    input.select();
+  }, 100);
+
+  setTimeout(() => {
+    input.focus();
+    input.select();
+  }, 300);
+}
+
+function resetInvoiceScreen(){
+  const msg = $("invoiceMsg");
 
   if(msg){
     msg.textContent = "";
   }
 
-  setTimeout(() => {
-    if(input){
-      input.focus();
-      input.select();
-    }
-  }, 150);
+  focusInvoiceInput();
 }
+
 function focusBarcodeInput(){
   const input = $("barcodeInput");
   if(!input) return;
@@ -651,14 +665,7 @@ if($("changeStaffBtnOrder")) $("changeStaffBtnOrder").onclick=showChangeStaffMod
 if($("changeStaffBtnItem")) $("changeStaffBtnItem").onclick=showChangeStaffModal;
 
 function clearInvoiceInput(){
-  const input = $("invoiceInput");
-  if(input){
-    input.value = "";
-    setTimeout(() => {
-      input.focus();
-      input.select();
-    }, 100);
-  }
+  focusInvoiceInput();
 }
 
 $("invoiceSearchBtn").onclick=()=>{
