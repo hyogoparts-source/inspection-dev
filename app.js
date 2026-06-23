@@ -542,7 +542,10 @@ function showQuantityModal(r){
   });
 }
 
-function showHoldModal(r){const reasons=["数量不足","商品バーコード不明","商品なし","送り状修正","その他"];showModal("保留理由",`<div>${reasons.map(x=>`<button class="btn holdReason" data-r="${x}">${x}</button>`).join("")}<textarea id="holdMemo" class="input" placeholder="メモ"></textarea></div>`,[{label:"キャンセル",onClick:()=>{closeModal();}}]);document.querySelectorAll(".holdReason").forEach(btn=>btn.onclick=()=>{markHold(r,btn.dataset.r,$("holdMemo").value||"");closeModal();renderOrder()})}
+function showHoldModal(r){const reasons=["数量不足","商品バーコード不明","商品なし","送り状修正","その他"];
+showModal("保留理由",`<div>${reasons.map(x=>`<button class="btn holdReason" data-r="${x}">${x}</button>`).join("")}<textarea id="holdMemo" class="input" placeholder="メモ"></textarea></div>`,[{label:"キャンセル",onClick:()=>{closeModal();
+}}]);
+document.querySelectorAll(".holdReason").forEach(btn=>btn.onclick=()=>{markHold(r,btn.dataset.r,$("holdMemo").value||"");closeModal();renderOrder()})}
 function renderComplete(){
   const items=state.currentItems;
   const resultRows=items.map(i=>getResult(i)).filter(Boolean);
@@ -665,7 +668,28 @@ function downloadCsv(){
   },1000);
 }
 
-$("loginBtn").onclick=()=>{const code=$("staffCodeInput").value.trim();if(!code)return showMsg("loginMsg","社員番号を入力してください");state.pendingStaffCode=code;show("loadView")};
+$("loginBtn").onclick=()=>{
+const code=$("staffCodeInput").value.trim();
+if(!code)return showMsg("loginMsg","社員番号を入力してください");
+state.pendingStaffCode=code;
+show("loadView")
+};
+document.querySelectorAll("[data-staffkey]").forEach(btn=>{
+  btn.onclick=()=>{
+    const k=btn.dataset.staffkey;
+    const input=$("staffCodeInput");
+
+    if(k==="clear") input.value="";
+    else if(k==="back") input.value=input.value.slice(0,-1);
+    else input.value+=k;
+  };
+});
+$("staffCodeInput").addEventListener("keydown", e=>{
+  if(e.key==="Enter"){
+    e.preventDefault();
+    $("loginBtn").click();
+  }
+});
 $("bundleFile").addEventListener("change",renderLoadedCsvList);
 $("loadCsvBtn").onclick=async()=>{try{const b=await readBundleCsv($("bundleFile"));state.staffList=b.staffRows;state.inspectionRows=b.itemRows;const staff=state.staffList.find(s=>s.staff_code===state.pendingStaffCode&&s.active_flag==="1");if(!staff){
       showModal("社員番号エラー",
@@ -882,8 +906,14 @@ $("barcodeInput").value="";
 handleBarcode(v)}});
 $("barcodeInput").addEventListener("change",e=>{const v=e.target.value;
 if(v){e.target.value="";handleBarcode(v)}});
-document.querySelectorAll(".keypad button").forEach(btn=>btn.onclick=()=>{const k=btn.dataset.key,input=$("checkedQtyInput");
-if(k==="clear")input.value="";else if(k==="back")input.value=input.value.slice(0,-1);else input.value+=k});
+document.querySelectorAll("[data-key]").forEach(btn=>btn.onclick=()=>{
+  const k=btn.dataset.key;
+  const input=$("checkedQtyInput");
+
+  if(k==="clear") input.value="";
+  else if(k==="back") input.value=input.value.slice(0,-1);
+  else input.value+=k;
+});
 $("confirmQtyBtn").onclick=()=>{const r=state.currentItems[state.currentIndex],need=String(Number(r.quantity||0)),checked=String(Number($("checkedQtyInput").value||0));
 if(!$("checkedQtyInput").value)return showMsg("itemMsg","確認数量を入力してください");
 if(need!==checked)return showMsg("itemMsg","数量が一致しません。保留処理を行ってください。");
