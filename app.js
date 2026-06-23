@@ -635,7 +635,7 @@ function clearInvoiceInput(){
 }
 
 $("invoiceSearchBtn").onclick=()=>{
-  const inv=normalizeBarcode($("invoiceInput").value);
+  const inv=normalizeInvoiceNo($("invoiceInput").value);
 
   if(!inv){
     showMsg("invoiceMsg","送り状Noを読み込んでください");
@@ -643,7 +643,7 @@ $("invoiceSearchBtn").onclick=()=>{
     return;
   }
 
-  const items=state.inspectionRows.filter(r=>normalizeBarcode(r.invoice_no)===inv);
+  const items=state.inspectionRows.filter(r=>normalizeInvoiceNo(r.invoice_no)===inv);
 
   if(!items.length){
     showMsg("invoiceMsg",`該当なし：${inv} は検品データにありません。もう一度読み込んでください。`);
@@ -829,3 +829,25 @@ if($("invoiceMsg")) $("invoiceMsg").textContent = "";
   ]
 );
 
+function normalizeInvoiceNo(v){
+  let s = String(v || "")
+    .replace(/\s/g, "")
+    .replace(/　/g, "")
+    .replace(/-/g, "")
+    .replace(/－/g, "")
+    .replace(/ー/g, "")
+    .replace(/―/g, "")
+    .trim();
+
+  // 佐川：D + 番号 + D
+  if(/^D\d+D$/i.test(s)){
+    s = s.slice(1, -1);
+  }
+
+  // ヤマト：A + 番号 + A
+  if(/^A\d+A$/i.test(s)){
+    s = s.slice(1, -1);
+  }
+
+  return s;
+}
