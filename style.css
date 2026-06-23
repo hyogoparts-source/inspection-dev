@@ -257,6 +257,7 @@ padding:18px}
   color: #7f1d1d;
 }
 
+/* 小さめボタンの基本 */
 .smallBtn {
   min-height: 34px;
   font-size: 16px;
@@ -328,29 +329,23 @@ html, body{
   padding:0;
 }
 
-/* 商品詳細以外の通常ボタンは押しやすく大きくする */
-#loginView .btn,
-#scanInvoiceView .btn,
-#orderView .btn,
-#completeView .btn {
+/* 基本：すべてのボタンを押しやすくする */
+.btn {
   min-height: 52px;
   padding: 12px 16px;
   font-size: 18px;
   margin: 8px 0;
 }
 
-/* 商品詳細以外の smallBtn も押しやすくする */
-#loginView .smallBtn,
-#scanInvoiceView .smallBtn,
-#orderView .smallBtn,
-#completeView .smallBtn {
+/* smallBtn も基本は少し押しやすくする */
+.smallBtn {
   min-height: 44px;
   padding: 9px 12px;
   font-size: 16px;
   margin: 6px 0;
 }
 
-/* 商品詳細画面は一画面に収めるためコンパクト維持 */
+/* 商品詳細画面だけ、一画面に収めるためコンパクトに戻す */
 #itemView .btn {
   min-height: 39px;
   padding: 6px 10px;
@@ -358,10 +353,16 @@ html, body{
   margin: 2px 0;
 }
 
-/* 商品詳細画面の小ボタン */
+/* 商品詳細画面の smallBtn はさらに小さめ */
 #itemView .smallBtn {
   min-height: 34px;
   padding: 5px 8px;
   font-size: 15px;
   margin: 2px 0;
+}
+
+/* 商品詳細内のテンキーは押しやすさを残す */
+#itemView .keypad button {
+  min-height: 46px;
+  font-size: 22px;
 }
