@@ -546,6 +546,7 @@ function showHoldModal(r){const reasons=["数量不足","商品バーコード�
 showModal("保留理由",`<div>${reasons.map(x=>`<button class="btn holdReason" data-r="${x}">${x}</button>`).join("")}<textarea id="holdMemo" class="input" placeholder="メモ"></textarea></div>`,[{label:"キャンセル",onClick:()=>{closeModal();
 }}]);
 document.querySelectorAll(".holdReason").forEach(btn=>btn.onclick=()=>{markHold(r,btn.dataset.r,$("holdMemo").value||"");closeModal();renderOrder()})}
+
 function renderComplete(){
   const items=state.currentItems;
   const resultRows=items.map(i=>getResult(i)).filter(Boolean);
@@ -566,107 +567,213 @@ function renderComplete(){
   $("completeSummary").textContent=
     `送り状No：${state.currentInvoice}\n注文番号：${items[0]?.order_no||""}\n商品数：${items.length}\nOK：${ok}\n保留：${hold}\n未検品：${pending}`;
 
-  /* 完了画面を開くたびに保存ボタン状態を初期化 */
+  saveCurrentResultToLocal();
+  updateLocalResultCount();
+
   $("saveResultBtn").disabled = false;
-  $("saveResultBtn").textContent = "保存";
-  $("saveResultBtn").classList.add("primary");
+  $("saveResultBtn").textContent = "検品結果CSVを保存";
+  $("saveResultBtn").classList.remove("primary");
   $("saveResultBtn").classList.remove("saved");
 
-  $("nextInvoiceBtn").disabled = true;
-  $("nextInvoiceBtn").classList.add("hidden");
-  $("nextInvoiceBtn").classList.remove("primary");
-  $("nextInvoiceBtn").classList.remove("ready");
-
-  $("saveMsg").textContent = "";
-
-  show("completeView");
-}
-
-function buildResultCsv(){
-  const completedAt=nowText();
-
-  const headers=[
-    "result_id",
-    "invoice_no",
-    "invoice_status",
-    "order_no",
-    "line_no",
-    "sku",
-    "read_barcode",
-    "master_barcode",
-    "quantity",
-    "checked_quantity",
-    "status",
-    "hold_reason",
-    "staff_code",
-    "admin_staff_code",
-    "check_method",
-    "barcode_register_flag",
-    "admin_review_required",
-    "started_at",
-    "checked_at",
-    "completed_at",
-    "memo"
-  ];
-
-  const invoiceStatus=state.currentItems.some(i=>statusOf(i)==="保留")?"HOLD":"OK";
-
-  const rows=state.results
-    .filter(r=>r.invoice_no===state.currentInvoice)
-    .map((r,i)=>({
-      result_id:`${state.currentInvoice}_${i+1}`,
-      invoice_status:invoiceStatus,
-      barcode_register_flag:r.barcode_register_flag||"0",
-      admin_review_required:r.admin_review_required||"0",
-      ...r,
-      completed_at:completedAt
-    }));
-
-  return [
-    headers.join(","),
-    ...rows.map(r=>headers.map(h=>csvEscape(r[h])).join(","))
-  ].join("\r\n");
-}
-
-function downloadCsv(){
-  const csv="\uFEFF"+buildResultCsv();
-  const d=new Date(),p=n=>String(n).padStart(2,"0");
-  const name=`inspection_result_${d.getFullYear()}${p(d.getMonth()+1)}${p(d.getDate())}_${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}.csv`;
-
-  /*
-    先に画面状態を変更する。
-    iPhone Safariのダウンロード確認が出る前に、
-    保存済み・次の送り状へボタンを反映させるため。
-  */
-  showMsg("saveMsg","保存しました。次の送り状へ進んでください。",true);
-
-  // 保存ボタン：グレーの「保存済み」
-  $("saveResultBtn").disabled = true;
-  $("saveResultBtn").textContent = "保存済み";
-  $("saveResultBtn").classList.remove("primary");
-  $("saveResultBtn").classList.add("saved");
-
-  // 次の送り状へ：表示して緑にする
   $("nextInvoiceBtn").disabled = false;
+  $("nextInvoiceBtn").textContent = "次の送り状へ";
   $("nextInvoiceBtn").classList.remove("hidden");
   $("nextInvoiceBtn").classList.add("primary");
   $("nextInvoiceBtn").classList.add("ready");
 
-  // ここから下でダウンロード開始
-  const blob=new Blob([csv],{type:"text/csv;charset=utf-8"});
-  const url=URL.createObjectURL(blob);
-  const a=document.createElement("a");
+  $("saveMsg").textContent = "端末内に検品結果を保存しました。";
 
-  a.href=url;
-  a.download=name;
+  show("completeView");
+}
+
+
+
+const LOCAL_RESULTS_KEY = "hyogo_parts_inspection_results_v1";
+const LOCAL_EXPORTED_AT_KEY = "hyogo_parts_inspection_exported_at_v1";
+
+const RESULT_HEADERS = [
+  "result_id",
+  "invoice_no",
+  "invoice_status",
+  "order_no",
+  "line_no",
+  "sku",
+  "read_barcode",
+  "master_barcode",
+  "quantity",
+  "checked_quantity",
+  "status",
+  "hold_reason",
+  "staff_code",
+  "admin_staff_code",
+  "check_method",
+  "barcode_register_flag",
+  "admin_review_required",
+  "started_at",
+  "checked_at",
+  "completed_at",
+  "memo"
+];
+
+function getLocalResults(){
+  try{
+    return JSON.parse(localStorage.getItem(LOCAL_RESULTS_KEY) || "[]");
+  }catch(e){
+    return [];
+  }
+}
+
+function saveLocalResults(rows){
+  localStorage.setItem(LOCAL_RESULTS_KEY, JSON.stringify(rows));
+}
+
+function getExportedAt(){
+  return localStorage.getItem(LOCAL_EXPORTED_AT_KEY) || "";
+}
+
+function setExportedAt(value){
+  localStorage.setItem(LOCAL_EXPORTED_AT_KEY, value || "");
+}
+
+function buildCurrentResultRows(){
+  const completedAt = nowText();
+
+  const invoiceStatus = state.currentItems.some(i => statusOf(i) === "保留") ? "HOLD" : "OK";
+
+  return state.results
+    .filter(r => r.invoice_no === state.currentInvoice)
+    .map((r, i) => ({
+      result_id: `${state.currentInvoice}_${r.line_no || i + 1}_${r.sku || ""}`,
+      invoice_status: invoiceStatus,
+      barcode_register_flag: r.barcode_register_flag || "0",
+      admin_review_required: r.admin_review_required || "0",
+      ...r,
+      completed_at: completedAt
+    }));
+}
+
+function saveCurrentResultToLocal(){
+  const currentRows = buildCurrentResultRows();
+
+  if(currentRows.length === 0){
+    return;
+  }
+
+  const allRows = getLocalResults();
+
+  currentRows.forEach(row => {
+    const key = [
+      row.result_id,
+      row.invoice_no,
+      row.order_no,
+      row.line_no,
+      row.sku
+    ].join("|");
+
+    const exists = allRows.some(x => {
+      const xKey = [
+        x.result_id,
+        x.invoice_no,
+        x.order_no,
+        x.line_no,
+        x.sku
+      ].join("|");
+
+      return xKey === key;
+    });
+
+    if(!exists){
+      allRows.push(row);
+    }
+  });
+
+  saveLocalResults(allRows);
+  updateLocalResultCount();
+}
+
+function buildBatchResultCsv(){
+  const rows = getLocalResults();
+
+  return [
+    RESULT_HEADERS.join(","),
+    ...rows.map(r => RESULT_HEADERS.map(h => csvEscape(r[h])).join(","))
+  ].join("\r\n");
+}
+
+function downloadBatchCsv(){
+  saveCurrentResultToLocal();
+
+  const rows = getLocalResults();
+
+  if(rows.length === 0){
+    showMsg("saveMsg", "保存する検品結果がありません。", false);
+    return;
+  }
+
+  const csv = "\uFEFF" + buildBatchResultCsv();
+
+  const d = new Date();
+  const p = n => String(n).padStart(2, "0");
+
+  const name =
+    `inspection_result_batch_${d.getFullYear()}${p(d.getMonth()+1)}${p(d.getDate())}_${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}.csv`;
+
+  const blob = new Blob([csv], {type:"text/csv;charset=utf-8"});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+
+  a.href = url;
+  a.download = name;
   document.body.appendChild(a);
   a.click();
   a.remove();
 
-  setTimeout(()=>{
+  setTimeout(() => {
     URL.revokeObjectURL(url);
-  },1000);
+  }, 1000);
+
+  setExportedAt(nowText());
+  updateLocalResultCount();
+
+  showMsg("saveMsg", "検品結果CSVをまとめて保存しました。", true);
 }
+
+function updateLocalResultCount(){
+  const rows = getLocalResults();
+  const exportedAt = getExportedAt();
+
+  const localCountEl = $("localResultCount");
+  const unsavedCountEl = $("unsavedResultCount");
+
+  if(localCountEl){
+    localCountEl.textContent = `${rows.length}件`;
+  }
+
+  if(unsavedCountEl){
+    if(!exportedAt){
+      unsavedCountEl.textContent = `${rows.length}件`;
+    }else{
+      const unsavedRows = rows.filter(r => {
+        return !r.completed_at || r.completed_at > exportedAt;
+      });
+
+      unsavedCountEl.textContent = `${unsavedRows.length}件`;
+    }
+  }
+}
+
+function clearLocalResultsAdmin(){
+  if(!confirm("端末内の検品結果を削除します。\n\nPCへの取込が完了している場合だけ実行してください。\n\n削除してよろしいですか？")){
+    return;
+  }
+
+  localStorage.removeItem(LOCAL_RESULTS_KEY);
+  localStorage.removeItem(LOCAL_EXPORTED_AT_KEY);
+  updateLocalResultCount();
+
+  showMsg("saveMsg", "端末内データをクリアしました。", true);
+}
+
 
 $("loginBtn").onclick=()=>{
 const code=$("staffCodeInput").value.trim();
@@ -919,10 +1026,16 @@ if(!$("checkedQtyInput").value)return showMsg("itemMsg","確認数量を入力�
 if(need!==checked)return showMsg("itemMsg","数量が一致しません。保留処理を行ってください。");
 markOk(r,state.lastReadBarcode?"barcode":"manual",state.lastReadBarcode,checked);
 showMsg("itemMsg","✓ 数量一致",true);setTimeout(goNextItem,600)};
-$("saveResultBtn").onclick=downloadCsv;
-$("nextInvoiceBtn").onclick=()=>{
+$("saveResultBtn").onclick = downloadBatchCsv;
+if($("clearLocalResultsBtn")){
+  $("clearLocalResultsBtn").onclick = clearLocalResultsAdmin;
+}
+$("nextInvoiceBtn").onclick = () => {
+  saveCurrentResultToLocal();
+
   $("nextInvoiceBtn").classList.add("hidden");
-  $("saveMsg").textContent="";
+  $("saveMsg").textContent = "";
+
   show("scanInvoiceView");
   resetInvoiceScreen();
 };
