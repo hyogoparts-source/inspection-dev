@@ -585,11 +585,13 @@ function renderComplete(){
   $("saveResultBtn").classList.remove("primary");
   $("saveResultBtn").classList.remove("saved");
 
-  $("nextInvoiceBtn").disabled = false;
-  $("nextInvoiceBtn").textContent = "次の送り状へ";
-  $("nextInvoiceBtn").classList.remove("hidden");
-  $("nextInvoiceBtn").classList.add("primary");
-  $("nextInvoiceBtn").classList.add("ready");
+  const allDone = isAllBundleInvoicesCompletedOnThisDevice();
+
+$("nextInvoiceBtn").disabled = false;
+$("nextInvoiceBtn").textContent = allDone ? "作業終了" : "次の送り状へ";
+$("nextInvoiceBtn").classList.remove("hidden");
+$("nextInvoiceBtn").classList.add("primary");
+$("nextInvoiceBtn").classList.add("ready");
 
   $("saveMsg").textContent = "端末内に検品結果を保存しました。";
 
@@ -770,6 +772,35 @@ function updateLocalResultCount(){
       unsavedCountEl.textContent = `${unsavedRows.length}件`;
     }
   }
+}
+
+function getBundleInvoiceNos(){
+  const set = new Set();
+
+  (state.inspectionRows || []).forEach(r => {
+    const inv = normalizeInvoiceNo(r.invoice_no);
+    if(inv) set.add(inv);
+  });
+
+  return Array.from(set);
+}
+
+function isAllBundleInvoicesCompletedOnThisDevice(){
+  const bundleInvoices = getBundleInvoiceNos();
+
+  if(bundleInvoices.length === 0){
+    return false;
+  }
+
+  const localRows = getLocalResults();
+
+  const completedInvoices = new Set(
+    localRows
+      .map(r => normalizeInvoiceNo(r.invoice_no))
+      .filter(Boolean)
+  );
+
+  return bundleInvoices.every(inv => completedInvoices.has(inv));
 }
 
 function clearLocalResultsAdmin(){
@@ -1056,12 +1087,46 @@ if($("clearLocalResultsBtn")){
 $("nextInvoiceBtn").onclick = () => {
   saveCurrentResultToLocal();
 
+  if(isAllBundleInvoicesCompletedOnThisDevice()){
+    showModal(
+      "作業終了",
+      `<p>CSV内の送り状はすべて検品済みです。</p>
+       <p>PCへ戻すため、まだの場合は［検品結果CSVを保存］を押してください。</p>`,
+      [
+        {
+          label:"検品結果CSVを保存",
+          kind:"primary",
+          onClick:()=>{
+            closeModal();
+            downloadBatchCsv();
+          }
+        },
+        {
+          label:"送り状読込画面へ戻る",
+          onClick:()=>{
+            closeModal();
+            $("nextInvoiceBtn").classList.add("hidden");
+            $("saveMsg").textContent = "";
+            show("scanInvoiceView");
+            resetInvoiceScreen();
+          }
+        },
+        {
+          label:"この画面を閉じる",
+          onClick:closeModal
+        }
+      ]
+    );
+    return;
+  }
+
   $("nextInvoiceBtn").classList.add("hidden");
   $("saveMsg").textContent = "";
 
   show("scanInvoiceView");
   resetInvoiceScreen();
 };
+
 document.addEventListener("visibilitychange", ()=>{
   if(document.visibilityState === "visible"){
     const activeView = document.querySelector(".view.active");
