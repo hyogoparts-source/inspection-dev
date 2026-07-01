@@ -389,3 +389,23 @@ html, body{
   color: #ffffff !important;
   opacity: 1 !important;
 }
+
+
+html,
+body {
+  touch-action: manipulation;
+}
+
+button,
+.keypad button,
+.staffKeypad button {
+  touch-action: manipulation;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+input,
+button {
+  font-size: 16px;
+}
