@@ -13,7 +13,7 @@
 <section id="loginView" class="view active">
   <h1>HYOGO PARTS 出荷検品</h1>
   <label class="label">社員番号</label>
-  <input id="staffCodeInput" class="input big" inputmode="numeric" pattern="[0-9]*" autocomplete="off">
+  <input id="staffCodeInput" class="input big" inputmode="numeric" pattern="[0-9]*" autocomplete="off" readonly>
 
 <div class="keypad staffKeypad">
   <button data-staffkey="1">1</button><button data-staffkey="2">2</button><button data-staffkey="3">3</button>
@@ -142,7 +142,7 @@
     次の送り状へ
   </button>
 
-  <button id="saveBatchResultBtn" class="btn">
+  <button id="saveResultBtn" class="btn">
     検品結果CSVを保存
   </button>
 
