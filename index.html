@@ -129,9 +129,34 @@
 <section id="completeView" class="view">
   <h1 id="completeTitle">検品完了</h1>
   <p id="completeSummary" class="summary"></p>
-  <button id="saveResultBtn" class="btn primary">保存</button>
+
+  <div class="resultStatusBox">
+    <div class="small">端末内保存件数</div>
+    <div id="localResultCount" class="strong">0件</div>
+
+    <div class="small">CSV未出力件数</div>
+    <div id="unsavedResultCount" class="strong">0件</div>
+  </div>
+
+  <button id="nextInvoiceBtn" class="btn primary">
+    次の送り状へ
+  </button>
+
+  <button id="saveBatchResultBtn" class="btn">
+    検品結果CSVを保存
+  </button>
+
+  <div id="adminResultTools" class="hidden">
+    <button id="viewLocalResultsBtn" class="btn">
+      端末内データを確認
+    </button>
+
+    <button id="clearLocalResultsBtn" class="btn danger">
+      端末内データをクリア
+    </button>
+  </div>
+
   <p id="saveMsg" class="msg"></p>
-  <button id="nextInvoiceBtn" class="btn hidden">次の送り状へ</button>
 </section>
 </main>
 
