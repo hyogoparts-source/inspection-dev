@@ -116,7 +116,17 @@ function renderOrder(){
   const ok=items.filter(i=>statusOf(i)==="OK").length;
   const hold=items.filter(i=>statusOf(i)==="保留").length;
   const pending=items.length-ok-hold;
+  const startBtn = $("startInspectionBtn");
 
+if(startBtn){
+  if(pending === 0){
+    startBtn.textContent = hold > 0 ? "保留内容を保存へ" : "検品完了へ";
+  }else if(ok > 0 || hold > 0){
+    startBtn.textContent = "検品再開";
+  }else{
+    startBtn.textContent = "検品開始";
+  }
+}
   $("progressLabel").innerHTML =
     `<div class="progressChips">
       <span class="chip pending">未検品 ${pending}</span>
@@ -786,9 +796,13 @@ document.querySelectorAll("[data-staffkey]").forEach(btn=>{
     const k=btn.dataset.staffkey;
     const input=$("staffCodeInput");
 
-    if(k==="clear") input.value="";
-    else if(k==="back") input.value=input.value.slice(0,-1);
-    else input.value+=k;
+    if(k==="clear"){
+      input.value="";
+    }else if(k==="back"){
+      input.value=input.value.slice(0,-1);
+    }else{
+      input.value+=k;
+    }
   };
 });
 $("staffCodeInput").addEventListener("keydown", e=>{
@@ -992,7 +1006,16 @@ $("backToInvoiceBtn").onclick=()=>{
   resetInvoiceScreen();
 };
 
-$("toOrderBtn").onclick=renderOrder;
+$("toOrderBtn").onclick = () => {
+  if(
+    state.currentItems.length > 0 &&
+    state.currentItems.every(i => statusOf(i) !== "未検品")
+  ){
+    renderComplete();
+  }else{
+    renderOrder();
+  }
+};
 
 $("holdBtn").onclick=()=>showHoldModal(state.currentItems[state.currentIndex]);
 
