@@ -283,14 +283,14 @@ padding:18px}
 }
 
 .readValue{
-  font-size:18px;
-  line-height:1.05;
-  min-height:22px;
+  font-size:15px;
+  line-height:1;
+  min-height:17px;
 }
 
 /* 読取値の下のボタン間隔を詰める */
 #manualBtn{
-  margin-top:2px !important;
+  margin-top:1px !important;
 
   background:#16a34a !important;
   border-color:#16a34a !important;
