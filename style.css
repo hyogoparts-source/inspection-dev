@@ -290,27 +290,16 @@ padding:18px}
 
 /* 読取値の下のボタン間隔を詰める */
 #manualBtn{
-  margin-top: 2px !important;
+  margin-top:2px !important;
 
-  background: #16a34a !important;
-  border-color: #16a34a !important;
-  color: #ffffff !important;
-
-  height: 50px !important;
-  min-height: 50px !important;
-  padding: 0 14px !important;
-
-  font-size: 18px !important;
-  font-weight: 700 !important;
-
-  display: inline-flex !important;
-  align-items: center !important;
-  justify-content: center !important;
+  background:#16a34a !important;
+  border-color:#16a34a !important;
+  color:#ffffff !important;
 }
 
 #manualBtn:active{
-  background: #15803d !important;
-  border-color: #15803d !important;
+  background:#15803d !important;
+  border-color:#15803d !important;
 }
 
 
@@ -375,9 +364,9 @@ html, body{
 
 /* 商品詳細画面の smallBtn はさらに小さめ */
 #itemView .smallBtn {
-  min-height: 34px;
+  min-height: 39px;
   padding: 5px 8px;
-  font-size: 15px;
+  font-size: 16px;
   margin: 2px 0;
 }
 
