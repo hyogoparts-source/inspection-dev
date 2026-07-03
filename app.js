@@ -1,5 +1,5 @@
 
-const state={staff:null,staffList:[],inspectionRows:[],barcodeMap:new Map(),aliasMap:new Map(),noBarcodeSet:new Set(),currentInvoice:null,currentItems:[],currentIndex:0,results:[],startedAt:null,lastReadBarcode:""};
+const state={staff:null,staffList:[],inspectionRows:[],processedRows:[],barcodeMap:new Map(),aliasMap:new Map(),noBarcodeSet:new Set(),currentInvoice:null,currentItems:[],currentIndex:0,results:[],startedAt:null,lastReadBarcode:""};
 const $=id=>document.getElementById(id);
 let barcodeInputTimer = null;
 function show(id){
@@ -90,16 +90,17 @@ function renderLoadedCsvList(){const f=$("bundleFile").files[0];$("loadedCsvList
 async function readBundleCsv(input){const f=input.files[0];
 if(!f)throw new Error("inspection_bundle.csv が選択されていません");
 const rows=await f.text().then(parseCsv);
-const staffRows=[],itemRows=[],barcodeRows=[],aliasRows=[],noBarcodeRows=[];
+const staffRows=[],itemRows=[],barcodeRows=[],aliasRows=[],noBarcodeRows=[],processedRows=[];
 for(const r of rows){const t=String(r.record_type||"").trim().toUpperCase();
 if(t==="STAFF")staffRows.push(r);
 else if(t==="ITEM")itemRows.push(r);else if(t==="BARCODE")barcodeRows.push(r);
 else if(t==="ALIAS")aliasRows.push(r);
-else if(t==="NO_BARCODE")noBarcodeRows.push(r)}
+else if(t==="NO_BARCODE")noBarcodeRows.push(r);
+else if(t==="PROCESSED")processedRows.push(r)}
 if(!staffRows.length)throw new Error("STAFF行がありません");
-if(!itemRows.length)throw new Error("ITEM行がありません");
+if(!itemRows.length && !processedRows.length)throw new Error("ITEM行またはPROCESSED行がありません");
 if(!barcodeRows.length && !noBarcodeRows.length)throw new Error("BARCODE行またはNO_BARCODE行がありません");
-return{staffRows,itemRows,barcodeRows,aliasRows,noBarcodeRows}}
+return{staffRows,itemRows,barcodeRows,aliasRows,noBarcodeRows,processedRows}}
 function normalizeBarcode(v){return String(v||"").replace(/[\s-]/g,"")}
 function itemKey(r){return `${r.invoice_no}__${r.line_no}__${r.sku}`}
 function getResult(r){return state.results.find(x=>x.key===itemKey(r))}
@@ -843,7 +844,7 @@ $("staffCodeInput").addEventListener("keydown", e=>{
   }
 });
 $("bundleFile").addEventListener("change",renderLoadedCsvList);
-$("loadCsvBtn").onclick=async()=>{try{const b=await readBundleCsv($("bundleFile"));state.staffList=b.staffRows;state.inspectionRows=b.itemRows;const staff=state.staffList.find(s=>s.staff_code===state.pendingStaffCode&&s.active_flag==="1");if(!staff){
+$("loadCsvBtn").onclick=async()=>{try{const b=await readBundleCsv($("bundleFile"));state.staffList=b.staffRows;state.inspectionRows=b.itemRows;state.processedRows=b.processedRows||[];const staff=state.staffList.find(s=>s.staff_code===state.pendingStaffCode&&s.active_flag==="1");if(!staff){
       showModal("社員番号エラー",
         `<p>社員番号が登録されていない、または使用できません。</p>
          <p>入力した社員番号：${state.pendingStaffCode}</p>`,
@@ -901,6 +902,39 @@ function clearInvoiceInput(){
   focusInvoiceInput();
 }
 
+function getProcessedInvoice(inv){
+  return (state.processedRows || []).find(r => normalizeInvoiceNo(r.invoice_no) === inv);
+}
+
+function showProcessedInvoiceModal(inv, processed){
+  const orderNo = processed.order_no || "";
+  const status = processed.reason || "OK";
+  const itemCount = processed.quantity || "";
+  const staffCode = processed.registered_by || "";
+  const completedAt = processed.registered_at || "";
+  const sourceFile = processed.source || "";
+
+  showModal(
+    "PC取込済み送り状",
+    `<p>この送り状は、すでにPCへ取込済みです。</p>
+     <p><strong>送り状No</strong><br>${inv}</p>
+     <p><strong>注文番号</strong><br>${orderNo}</p>
+     <p><strong>状態</strong><br>${status}</p>
+     <p><strong>商品行数</strong><br>${itemCount || "-"}</p>
+     <p><strong>作業者</strong><br>${staffCode || "-"}</p>
+     <p><strong>検品日時</strong><br>${completedAt || "-"}</p>
+     <p><strong>取込ファイル</strong><br>${sourceFile || "-"}</p>
+     <p class="msg">再検品する場合は、PC側で検品済み除外を解除して、スマホ検品CSVを作り直してください。</p>`,
+    [
+      {label:"この画面を閉じる",kind:"primary",onClick:()=>{
+        closeModal();
+        show("scanInvoiceView");
+        resetInvoiceScreen();
+      }}
+    ]
+  );
+}
+
 $("invoiceSearchBtn").onclick=()=>{
   const inv=normalizeInvoiceNo($("invoiceInput").value);
 
@@ -913,6 +947,14 @@ $("invoiceSearchBtn").onclick=()=>{
   const items=state.inspectionRows.filter(r=>normalizeInvoiceNo(r.invoice_no)===inv);
 
   if(!items.length){
+    const processed = getProcessedInvoice(inv);
+
+    if(processed){
+      showMsg("invoiceMsg","");
+      showProcessedInvoiceModal(inv, processed);
+      return;
+    }
+
     showMsg("invoiceMsg",`該当なし：${inv} は検品データにありません。もう一度読み込んでください。`);
     clearInvoiceInput();
     return;
@@ -1087,46 +1129,12 @@ if($("clearLocalResultsBtn")){
 $("nextInvoiceBtn").onclick = () => {
   saveCurrentResultToLocal();
 
-  if(isAllBundleInvoicesCompletedOnThisDevice()){
-    showModal(
-      "作業終了",
-      `<p>CSV内の送り状はすべて検品済みです。</p>
-       <p>PCへ戻すため、まだの場合は［検品結果CSVを保存］を押してください。</p>`,
-      [
-        {
-          label:"検品結果CSVを保存",
-          kind:"primary",
-          onClick:()=>{
-            closeModal();
-            downloadBatchCsv();
-          }
-        },
-        {
-          label:"送り状読込画面へ戻る",
-          onClick:()=>{
-            closeModal();
-            $("nextInvoiceBtn").classList.add("hidden");
-            $("saveMsg").textContent = "";
-            show("scanInvoiceView");
-            resetInvoiceScreen();
-          }
-        },
-        {
-          label:"この画面を閉じる",
-          onClick:closeModal
-        }
-      ]
-    );
-    return;
-  }
-
   $("nextInvoiceBtn").classList.add("hidden");
   $("saveMsg").textContent = "";
 
   show("scanInvoiceView");
   resetInvoiceScreen();
 };
-
 document.addEventListener("visibilitychange", ()=>{
   if(document.visibilityState === "visible"){
     const activeView = document.querySelector(".view.active");
