@@ -1,5 +1,5 @@
 
-const state={staff:null,staffList:[],inspectionRows:[],processedRows:[],barcodeMap:new Map(),aliasMap:new Map(),noBarcodeSet:new Set(),currentInvoice:null,currentItems:[],currentIndex:0,results:[],startedAt:null,lastReadBarcode:""};
+const state={staff:null,staffList:[],inspectionRows:[],processedRows:[],barcodeMap:new Map(),aliasMap:new Map(),noBarcodeSet:new Set(),currentInvoice:null,currentItems:[],currentIndex:0,results:[],startedAt:null,lastReadBarcode:"",lastMismatchBarcode:"",lastMismatchMaster:""};
 const $=id=>document.getElementById(id);
 let barcodeInputTimer = null;
 function show(id){
@@ -176,6 +176,9 @@ $("itemShipName").textContent=r.ship_name||"";
 $("itemSku").textContent=r.sku;
 $("itemQty").textContent=`数量：${r.quantity}`;
 $("itemName").textContent=r.item_name||"";
+state.lastReadBarcode="";
+state.lastMismatchBarcode="";
+state.lastMismatchMaster="";
 $("readValue").textContent="スキャン待機中";$("itemMsg").textContent="";$("quantityPanel")
 .classList.add("hidden");$("checkedQtyInput").value="";const img=$("itemImage"),no=$("noImage");if(r.image_url){img.src=r.image_url;img.classList.remove("hidden");no.classList.add("hidden");img.onerror=()=>{img.classList.add("hidden");no
 .classList.remove("hidden")}}else{
@@ -212,6 +215,21 @@ function markOk(r,method,read,qty){
     completed_at:"",
     memo:""
   });
+}
+
+function markManualAfterMismatch(r, read, master, qty){
+  const safeRead = read || state.lastMismatchBarcode || state.lastReadBarcode || "";
+  const safeMaster = master || state.lastMismatchMaster || state.barcodeMap.get(r.sku) || "";
+
+  markOk(r, "manual_after_mismatch", safeRead, qty);
+
+  const res = getResult(r);
+  if(res){
+    res.master_barcode = safeMaster;
+    res.barcode_register_flag = "1";
+    res.admin_review_required = "1";
+    res.memo = "バーコード不一致後に手動確認・管理者確認待ち";
+  }
 }
 function markHold(r,reason,memo=""){
   const t=nowText();
@@ -261,16 +279,22 @@ function handleBarcode(raw){
   // BARCODE行もALIAS行もなく、NO_BARCODE行にある商品
   // → 商品バーコード未登録として登録候補フローへ進む
   if(!allowed.length && isNoBarcodeItem){
+    state.lastMismatchBarcode = "";
+    state.lastMismatchMaster = "";
     return showNoBarcodeRegister(r, read);
   }
 
   // BARCODE行またはALIAS行があるが、読取値が一致しない
   // → 管理者確認が必要なバーコード不一致
   if(!allowed.includes(read)){
+    state.lastMismatchBarcode = read;
+    state.lastMismatchMaster = allowed[0] || "";
     return showBarcodeMismatch(r, read, allowed[0] || "");
   }
 
   // 通常一致
+  state.lastMismatchBarcode = "";
+  state.lastMismatchMaster = "";
   if(Number(r.quantity || 1) >= 2){
     showQuantityModal(r);
   }else{
@@ -283,10 +307,41 @@ function showModal(t,b,acts){$("modalTitle").textContent=t;$("modalBody").innerH
 .forEach(a=>{const btn=document.createElement("button");btn.className="btn "+(a.kind||"");btn
 .textContent=a.label;btn.onclick=a.onClick;$("modalActions").appendChild(btn)});$("modal").classList.remove("hidden")}
 function closeModal(){$("modal").classList.add("hidden")}
-function showBarcodeMismatch(r,read,master){showModal("バーコード不一致",`<p><strong>品番</strong><br>${r.sku}</p><p><strong>登録</strong><br>${master||"登録なし"}</p><p><strong>読取</strong><br>${read}</p>`,[{label:"再スキャン",onClick:()=>{
-  closeModal();
-  focusBarcodeInput();
-}},{label:"正しければ登録",kind:"primary",onClick:()=>showAdminRegister(r,read,master)},{label:"保留",kind:"danger",onClick:()=>{closeModal();showHoldModal(r)}}])}
+function showBarcodeMismatch(r,read,master){
+  state.lastMismatchBarcode = read;
+  state.lastMismatchMaster = master || "";
+
+  showModal(
+    "バーコード不一致",
+    `<p><strong>品番</strong><br>${r.sku}</p>
+     <p><strong>登録</strong><br>${master||"登録なし"}</p>
+     <p><strong>読取</strong><br>${read}</p>
+     <p class="msg">商品が正しい場合は「手動確認でOK」を選ぶと、読取バーコードを管理者確認待ちとしてCSVに残します。</p>`,
+    [
+      {label:"再スキャン",onClick:()=>{
+        state.lastReadBarcode = "";
+        state.lastMismatchBarcode = "";
+        state.lastMismatchMaster = "";
+        closeModal();
+        focusBarcodeInput();
+      }},
+      {label:"正しければ登録",kind:"primary",onClick:()=>showAdminRegister(r,read,master)},
+      {label:"手動確認でOK",onClick:()=>{
+        closeModal();
+
+        if(Number(r.quantity || 1) >= 2){
+          showQuantityModal(r, "manual_after_mismatch");
+          return;
+        }
+
+        markManualAfterMismatch(r, read, master, "1");
+        showMsg("itemMsg","手動確認OK。読取バーコードを管理者確認待ちとして記録しました",true);
+        setTimeout(goNextItem,800);
+      }},
+      {label:"保留",kind:"danger",onClick:()=>{closeModal();showHoldModal(r)}}
+    ]
+  );
+}
 function showAdminRegister(r,read,master){
   showModal(
     "管理者社員番号",
@@ -503,7 +558,7 @@ function showQuantityModalForNoBarcode(r, read){
   });
 } 
 
-function showQuantityModal(r){
+function showQuantityModal(r, mode="auto"){
   if(document.activeElement) document.activeElement.blur();
 
   const need = String(Number(r.quantity || 0));
@@ -533,8 +588,17 @@ function showQuantityModal(r){
           $("modalQtyMsg").textContent = "数量が一致しません。保留処理を行ってください。";
           return;
         }
+
         closeModal();
-        markOk(r, state.lastReadBarcode ? "barcode" : "manual", state.lastReadBarcode, checked);
+
+        if(mode === "manual_after_mismatch"){
+          markManualAfterMismatch(r, state.lastMismatchBarcode || state.lastReadBarcode, state.lastMismatchMaster || "", checked);
+        }else if(mode === "manual"){
+          markOk(r, "manual", "", checked);
+        }else{
+          markOk(r, state.lastReadBarcode ? "barcode" : "manual", state.lastReadBarcode, checked);
+        }
+
         showMsg("itemMsg","✓ 数量一致",true);
         setTimeout(goNextItem,600);
       }},
@@ -1094,13 +1158,21 @@ $("holdBtn").onclick=()=>showHoldModal(state.currentItems[state.currentIndex]);
 
 $("manualBtn").onclick=()=>{
   const r=state.currentItems[state.currentIndex];
+  const hasMismatch = !!state.lastMismatchBarcode;
+
   if(Number(r.quantity||1)>=2){
-    state.lastReadBarcode="";
-    $("readValue").textContent="手動確認";
-    showQuantityModal(r);
+    $("readValue").textContent = hasMismatch ? state.lastMismatchBarcode : "手動確認";
+    showQuantityModal(r, hasMismatch ? "manual_after_mismatch" : "manual");
   }else{
-    markOk(r,"manual","","1");
-    showMsg("itemMsg","手動確認OK",true);
+    if(hasMismatch){
+      markManualAfterMismatch(r, state.lastMismatchBarcode, state.lastMismatchMaster, "1");
+      showMsg("itemMsg","手動確認OK。読取バーコードを管理者確認待ちとして記録しました",true);
+    }else{
+      state.lastReadBarcode="";
+      markOk(r,"manual","","1");
+      showMsg("itemMsg","手動確認OK",true);
+    }
+
     setTimeout(goNextItem,600);
   }
 };
