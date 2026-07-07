@@ -747,7 +747,7 @@ function saveCurrentResultToLocal(){
       row.sku
     ].join("|");
 
-    const exists = allRows.some(x => {
+    const existingIndex = allRows.findIndex(x => {
       const xKey = [
         x.result_id,
         x.invoice_no,
@@ -759,7 +759,11 @@ function saveCurrentResultToLocal(){
       return xKey === key;
     });
 
-    if(!exists){
+    // 同じ送り状・同じ行を再検品した場合は、古い端末内結果を残さず上書きする。
+    // これにより、バーコード不一致後の手動確認結果もCSVに反映される。
+    if(existingIndex >= 0){
+      allRows[existingIndex] = row;
+    }else{
       allRows.push(row);
     }
   });
