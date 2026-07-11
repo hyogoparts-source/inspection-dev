@@ -418,3 +418,41 @@ input,
 button {
   font-size: 16px;
 }
+
+/* =========================================
+   商品詳細画面：読取値表示を非表示にする
+   ※ app.js が readValue を使うため、HTMLは削除せずCSSで隠す
+========================================= */
+#itemView .readBox {
+  display: none !important;
+  height: 0 !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+}
+
+/* 読取値を消した分、商品詳細画面の主要ボタンを押しやすくする */
+#itemView #manualBtn,
+#itemView #holdBtn {
+  min-height: 56px !important;
+  padding: 12px 14px !important;
+  font-size: 20px !important;
+  margin: 8px 0 !important;
+  border-radius: 14px !important;
+}
+
+/* 一覧へ戻るは補助操作なので、少しだけ大きくする */
+#itemView #toOrderBtn {
+  min-height: 48px !important;
+  padding: 10px 14px !important;
+  font-size: 18px !important;
+  margin: 8px 0 !important;
+  border-radius: 14px !important;
+}
+
+/* 商品詳細画面のメッセージ欄は必要なときだけ表示されるように詰める */
+#itemView #itemMsg {
+  min-height: 0 !important;
+  margin: 2px 0 !important;
+  padding: 0 !important;
+}
