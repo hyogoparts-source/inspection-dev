@@ -1,0 +1,473 @@
+:root{--bg:#f4f5f7;
+--card:#fff;
+--text:#111827;
+--muted:#6b7280;
+--line:#d1d5db;
+--primary:#0f766e;
+--danger:#b91c1c;
+--ok:#047857;
+--hold:#b45309}
+*{box-sizing:border-box}body{margin:0;
+background:var(--bg);color:var(--text);
+font-family:-apple-system,BlinkMacSystemFont,"Helvetica Neue",Arial,sans-serif}
+#app{
+  max-width:520px;
+  margin:0 auto;
+  padding:8px;
+}
+.view{display:none;background:var(--card);
+min-height:calc(100vh - 28px);
+padding:8px;
+border-radius:14px;
+box-shadow:0 4px 16px #0001}
+.view.active{display:block}h1{margin:0 0 20px;
+font-size:28px}
+.label,.small{display:block;
+color:var(--muted);font-size:14px;margin-bottom:6px;
+}
+.input{width:100%;border:2px solid var(--line);
+border-radius:12px;
+padding:12px;
+font-size:20px;
+margin-bottom:12px;
+}
+.input.big{font-size:30px;height:58px;
+}
+.btn{
+  display:block;
+  width:100%;
+  min-height:39px;
+  border:0;
+  border-radius:12px;
+  background:#e5e7eb;
+  color:var(--text);
+  font-size:19px;
+  font-weight:700;
+  margin:2px 0;
+}
+.btn.primary{background:var(--primary);color:white}
+.btn.danger{background:var(--danger);color:white}
+.msg{min-height:24px;font-size:16px;color:var(--danger);font-weight:700}
+.note{color:var(--muted)}.fileLabel{display:block;padding:12px;background:#f9fafb;border:1px solid var(--line);border-radius:12px;margin:10px 0;font-weight:700}
+.fileLabel input{display:block;margin-top:8px;width:100%}
+.loadedList{background:#f9fafb;border:1px solid var(--line);border-radius:12px;padding:12px;margin:12px 0}
+.loadedList ul{margin:8px 0 0;padding-left:20px}
+.loadedList li{margin:4px 0;font-weight:700}.staff{font-size:18px;font-weight:700}
+.header{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:8px 12px;
+  border-bottom:1px solid var(--line);
+  padding-bottom:8px;
+  margin-bottom:10px;
+}
+
+.header > div:nth-child(3){
+  grid-column:1 / -1;
+  padding-top:4px;
+}
+
+.header > div:nth-child(3) .small{
+  display:none;
+}
+
+.header > div:nth-child(3) .strong::before{
+  content:"氏名：";
+  font-size:16px;
+  font-weight:700;
+}
+
+.header .small{
+  margin-bottom:2px;
+}
+
+.header .strong{
+  font-size:24px;
+  font-weight:900;
+}
+.strong{font-size:20px;font-weight:800}
+.progress{background:#ecfeff;
+border:1px solid #99f6e4;padding:12px;
+border-radius:12px;margin:14px 0;
+font-weight:800}
+.itemRow{padding:12px;
+border:1px solid var(--line);border-radius:12px;
+margin-bottom:10px;
+background:#fff}
+
+.itemRow .state{font-weight:900}
+.itemRow.ok{border-color:var(--ok)}
+.itemRow.hold{border-color:var(--hold)}
+.imageWrap{height:280px;
+border:1px solid var(--line);
+border-radius:16px;
+background:#f9fafb;display:flex;
+align-items:center;
+justify-content:center;
+overflow:hidden}
+
+.imageWrap img{
+  width:auto;
+  height:100%;
+}
+.noImage{color:var(--muted);
+font-size:24px;
+font-weight:800;
+}
+.sku{font-size:28px;
+font-weight:900;
+margin-top:0;
+margin-bottom:0;
+}
+.qty{font-size:28px;
+font-weight:900;
+margin-top:0;
+margin-bottom:0;
+}
+.itemName{
+  font-size:14px;
+  line-height:1.15;
+  margin:4px 0;
+  max-height:38px;
+  overflow:hidden;
+}
+.readBox{
+  border-top:1px solid var(--line);
+  border-bottom:1px solid var(--line);
+  padding:2px 0;
+  margin:2px 0;
+}
+
+.hidden{display:none!important}
+.quantityPanel{border:2px solid var(--primary);
+padding:12px;border-radius:14px;
+margin:12px 0;
+}
+.needed{font-size:24px;
+font-weight:900;
+margin-bottom:8px}
+
+.qtyInput{text-align:center;
+font-size:28px;
+font-weight:900;
+}
+.keypad{display:grid;
+grid-template-columns:repeat(3,1fr);
+gap:8px}
+
+.keypad button{min-height:46px;
+border:0;border-radius:10px;
+background:#e5e7eb;
+font-size:22px;font-weight:900;
+}
+
+.summary{white-space:pre-line;
+font-size:18px;
+line-height:1.6}
+
+.modal{position:fixed;inset:0;
+background:#0007;
+display:flex;align-items:center;
+justify-content:center;padding:16px}
+
+.modalCard{width:100%;max-width:480px;
+background:white;border-radius:18px;
+padding:18px}
+
+.modalCard h2{margin-top:0}
+
+.qtyModalSku {
+  font-size: 24px;
+  font-weight: 900;
+  margin-bottom: 4px;
+}
+.qtyModalName {
+  font-size: 15px;
+  color: var(--muted);
+  max-height: 40px;
+  overflow: hidden;
+  margin-bottom: 10px;
+}
+.qtyModalNeed {
+  font-size: 26px;
+  font-weight: 900;
+  margin: 8px 0 10px;
+}
+.qtyModal .qtyInput {
+  height: 58px;
+  margin-bottom: 10px;
+}
+.qtyModal .keypad {
+  margin-bottom: 8px;
+}
+.qtyModal .keypad button {
+  min-height: 42px;
+}
+
+/* v8 status visibility */
+.progress {
+  background: transparent;
+  border: 0;
+  padding: 0;
+}
+.progressChips {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 8px;
+  margin: 14px 0;
+}
+.chip {
+  display: block;
+  text-align: center;
+  padding: 10px 4px;
+  border-radius: 12px;
+  font-weight: 900;
+  border: 2px solid transparent;
+}
+.chip.pending {
+  background: #f3f4f6;
+  border-color: #d1d5db;
+}
+.chip.ok {
+  background: #dcfce7;
+  border-color: #16a34a;
+  color: #14532d;
+}
+.chip.hold {
+  background: #fee2e2;
+  border-color: #dc2626;
+  color: #7f1d1d;
+}
+.itemRow.pending {
+  background: #f9fafb;
+  border-color: #d1d5db;
+}
+.itemRow.ok {
+  background: #dcfce7;
+  border-color: #16a34a;
+}
+.itemRow.hold {
+  background: #fee2e2;
+  border-color: #dc2626;
+}
+.itemRow.ok .state {
+  color: #14532d;
+}
+.itemRow.hold .state {
+  color: #7f1d1d;
+}
+
+/* 小さめボタンの基本 */
+.smallBtn {
+  min-height: 34px;
+  font-size: 16px;
+  margin: 2px 0;
+}
+.smallStaff {
+  margin: 0;
+  font-size: 12px;
+}
+.hiddenInput{
+  position:fixed;
+  left:-9999px;
+  top:-9999px;
+  width:1px;
+  height:1px;
+  opacity:0;
+  pointer-events:none;
+}
+/* 読取値エリアの空白削減 */
+.readBox{
+  padding:2px 0 !important;
+  margin:2px 0 !important;
+}
+
+.readValue{
+  font-size:15px;
+  line-height:1;
+  min-height:17px;
+}
+
+/* 読取値の下のボタン間隔を詰める */
+#manualBtn{
+  margin-top:1px !important;
+
+  background:#16a34a !important;
+  border-color:#16a34a !important;
+  color:#ffffff !important;
+}
+
+#manualBtn:active{
+  background:#15803d !important;
+  border-color:#15803d !important;
+}
+
+
+#itemMsg{
+  min-height:0;
+  margin:0;
+  padding:0;
+}
+#quantityPanel.hidden{
+  display:none !important;
+  height:0 !important;
+  margin:0 !important;
+  padding:0 !important;
+  border:0 !important;
+}
+html, body{
+  height:100%;
+  overflow:hidden;
+  overscroll-behavior:none;
+}
+
+#app{
+  height:100dvh;
+  overflow-y:auto;
+  -webkit-overflow-scrolling:touch;
+}
+
+.itemInfoBox{
+  font-size:16px;
+  line-height:1.2;
+  margin-bottom:4px;
+}
+
+.itemInfoBox div{
+  margin:0;
+  padding:0;
+}
+
+/* 基本：すべてのボタンを押しやすくする */
+.btn {
+  min-height: 52px;
+  padding: 12px 16px;
+  font-size: 18px;
+  margin: 8px 0;
+}
+
+/* smallBtn も基本は少し押しやすくする */
+.smallBtn {
+  min-height: 44px;
+  padding: 9px 12px;
+  font-size: 16px;
+  margin: 6px 0;
+}
+
+/* 商品詳細画面だけ、一画面に収めるためコンパクトに戻す */
+#itemView .btn {
+  min-height: 39px;
+  padding: 6px 10px;
+  font-size: 16px;
+  margin: 2px 0;
+}
+
+/* 商品詳細画面の smallBtn はさらに小さめ */
+#itemView .smallBtn {
+  min-height: 39px;
+  padding: 5px 8px;
+  font-size: 16px;
+  margin: 2px 0;
+}
+
+/* 商品詳細内のテンキーは押しやすさを残す */
+#itemView .keypad button {
+  min-height: 46px;
+  font-size: 22px;
+}
+
+/* 無効ボタンはグレー表示 */
+.btn:disabled {
+  background: #d1d5db !important;
+  color: #6b7280 !important;
+  opacity: 1 !important;
+}
+
+/* 保存後：保存済みボタンは必ずグレー */
+#saveResultBtn.saved,
+#saveResultBtn.saved:disabled {
+  background: #d1d5db !important;
+  color: #6b7280 !important;
+  opacity: 1 !important;
+}
+
+/* 保存後：次の送り状へボタンは必ず緑 */
+#nextInvoiceBtn.ready,
+#nextInvoiceBtn.ready:not(:disabled) {
+  background: var(--primary) !important;
+  color: #ffffff !important;
+  opacity: 1 !important;
+}
+
+
+html,
+body {
+  touch-action: manipulation;
+}
+
+button,
+.keypad button,
+.staffKeypad button {
+  touch-action: manipulation;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+input,
+button {
+  font-size: 16px;
+}
+
+/* =========================================
+   TEST: 商品詳細画面の読取値表示を非表示
+   ※ app.js が readValue を使うため、HTMLは残してCSSで隠す
+========================================= */
+#itemView .readBox {
+  display: none !important;
+  height: 0 !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+}
+
+/* TEST: AsReader比較用の読取開始ボタン */
+#itemView #scanEnableBtn {
+  min-height: 56px !important;
+  padding: 12px 14px !important;
+  font-size: 20px !important;
+  margin: 8px 0 !important;
+  border-radius: 14px !important;
+  background: #2563eb !important;
+  color: #ffffff !important;
+}
+
+/* TEST: 読取開始後 */
+#itemView #scanEnableBtn.active {
+  background: var(--primary) !important;
+  color: #ffffff !important;
+}
+
+/* TEST: 商品詳細画面の主要ボタンを押しやすくする */
+#itemView #manualBtn,
+#itemView #holdBtn {
+  min-height: 56px !important;
+  padding: 12px 14px !important;
+  font-size: 20px !important;
+  margin: 8px 0 !important;
+  border-radius: 14px !important;
+}
+
+#itemView #toOrderBtn {
+  min-height: 48px !important;
+  padding: 10px 14px !important;
+  font-size: 18px !important;
+  margin: 8px 0 !important;
+  border-radius: 14px !important;
+}
+
+#itemView #itemMsg {
+  min-height: 0 !important;
+  margin: 2px 0 !important;
+  padding: 0 !important;
+}
