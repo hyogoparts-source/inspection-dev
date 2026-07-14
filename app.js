@@ -291,6 +291,116 @@ function markManualAfterMismatch(r, read, master, qty){
     res.memo = "バーコード不一致後に手動確認・管理者確認待ち";
   }
 }
+
+function markAdminProductOkBarcodeWrong(r, read, master, adminCode, qty){
+  markOk(r, "admin_product_ok_barcode_wrong", read, qty);
+
+  const res = getResult(r);
+  if(res){
+    res.master_barcode = master || "";
+    res.admin_staff_code = adminCode || "";
+    res.barcode_register_flag = "0";
+    res.admin_review_required = "0";
+    res.memo = "商品は管理者確認済み。読取バーコードは登録しない";
+  }
+}
+
+function markBarcodeReplaceAdmin(r, read, master, adminCode, qty){
+  markOk(r, "barcode_replace_admin", read, qty);
+
+  const res = getResult(r);
+  if(res){
+    res.master_barcode = master || "";
+    res.admin_staff_code = adminCode || "";
+    res.barcode_register_flag = "1";
+    res.admin_review_required = "0";
+    res.memo = "管理者現物確認済み。登録済みバーコードを変更";
+  }
+}
+
+function completeAdminBarcodeDecision(r, read, master, adminCode, decision, qty){
+  if(decision === "product_ok_no_register"){
+    markAdminProductOkBarcodeWrong(r, read, master, adminCode, qty);
+    showMsg("itemMsg", "管理者確認OK。バーコードは登録しません", true);
+  }else if(decision === "replace_barcode"){
+    markBarcodeReplaceAdmin(r, read, master, adminCode, qty);
+    showMsg("itemMsg", "管理者確認OK。バーコード変更対象として記録しました", true);
+  }
+
+  setTimeout(goNextItem, 800);
+}
+
+function showAdminBarcodeDecisionQuantityModal(r, read, master, adminCode, decision){
+  if(document.activeElement) document.activeElement.blur();
+
+  const need = String(Number(r.quantity || 0));
+
+  showModal("数量確認",
+    `<div class="qtyModal">
+      <div class="qtyModalSku">${r.sku}</div>
+      <div class="qtyModalName">${r.item_name || ""}</div>
+      <div class="qtyModalNeed">必要数量：${need}</div>
+      <input id="modalQtyInput" class="input qtyInput" inputmode="numeric" pattern="[0-9]*" autocomplete="off" placeholder="確認数量" readonly>
+      <div class="keypad">
+        <button data-mkey="1">1</button><button data-mkey="2">2</button><button data-mkey="3">3</button>
+        <button data-mkey="4">4</button><button data-mkey="5">5</button><button data-mkey="6">6</button>
+        <button data-mkey="7">7</button><button data-mkey="8">8</button><button data-mkey="9">9</button>
+        <button data-mkey="clear">C</button><button data-mkey="0">0</button><button data-mkey="back">←</button>
+      </div>
+      <p id="modalQtyMsg" class="msg"></p>
+    </div>`,
+    [
+      {
+        label:"確定",
+        kind:"primary",
+        onClick:()=>{
+          const input = $("modalQtyInput");
+          const checked = String(Number(input.value || 0));
+
+          if(!input.value){
+            $("modalQtyMsg").textContent = "確認数量を入力してください";
+            return;
+          }
+
+          if(checked !== need){
+            $("modalQtyMsg").textContent = "数量が一致しません。保留処理を行ってください。";
+            return;
+          }
+
+          closeModal();
+          completeAdminBarcodeDecision(r, read, master, adminCode, decision, checked);
+        }
+      },
+      {
+        label:"保留",
+        kind:"danger",
+        onClick:()=>{
+          closeModal();
+          showHoldModal(r);
+        }
+      },
+      {
+        label:"キャンセル",
+        onClick:()=>{
+          closeModal();
+          showBarcodeMismatch(r, read, master);
+        }
+      }
+    ]
+  );
+
+  document.querySelectorAll("[data-mkey]").forEach(btn=>{
+    btn.onclick=()=>{
+      const k = btn.dataset.mkey;
+      const input = $("modalQtyInput");
+
+      if(k === "clear") input.value = "";
+      else if(k === "back") input.value = input.value.slice(0, -1);
+      else input.value += k;
+    };
+  });
+}
+
 function markHold(r,reason,memo=""){
   const t=nowText();
   setResult(r,{
@@ -372,89 +482,114 @@ function showBarcodeMismatch(r,read,master){
   state.lastMismatchMaster = master || "";
 
   showModal(
-    "バーコード不一致",
+    "登録済みバーコードと違います",
     `<p><strong>品番</strong><br>${r.sku}</p>
-     <p><strong>登録</strong><br>${master||"登録なし"}</p>
-     <p><strong>読取</strong><br>${read}</p>
-     <p class="msg">商品が正しい場合は「手動確認でOK」を選ぶと、読取バーコードを管理者確認待ちとしてCSVに残します。</p>`,
+     <p><strong>登録済みバーコード</strong><br>${master || "登録なし"}</p>
+     <p><strong>今回読取</strong><br>${read}</p>
+     <p class="msg">
+       この商品には、すでに登録済みのバーコードがあります。<br>
+       読み間違いの可能性がある場合は再スキャンしてください。<br>
+       商品が正しいか判断が必要な場合は、管理者確認へ進んでください。
+     </p>`,
     [
-      {label:"再スキャン",onClick:()=>{
-        state.lastReadBarcode = "";
-        state.lastMismatchBarcode = "";
-        state.lastMismatchMaster = "";
-        closeModal();
-        focusBarcodeInput();
-      }},
-      {label:"正しければ登録",kind:"primary",onClick:()=>showAdminRegister(r,read,master)},
-      {label:"手動確認でOK",onClick:()=>{
-        closeModal();
-
-        if(Number(r.quantity || 1) >= 2){
-          showQuantityModal(r, "manual_after_mismatch");
-          return;
+      {
+        label:"再スキャン",
+        onClick:()=>{
+          state.lastReadBarcode = "";
+          state.lastMismatchBarcode = "";
+          state.lastMismatchMaster = "";
+          closeModal();
+          focusBarcodeInput();
         }
-
-        markManualAfterMismatch(r, read, master, "1");
-        showMsg("itemMsg","手動確認OK。読取バーコードを管理者確認待ちとして記録しました",true);
-        setTimeout(goNextItem,800);
-      }},
-      {label:"保留",kind:"danger",onClick:()=>{closeModal();showHoldModal(r)}}
+      },
+      {
+        label:"管理者確認",
+        kind:"primary",
+        onClick:()=>showAdminRegister(r,read,master)
+      },
+      {
+        label:"保留",
+        kind:"danger",
+        onClick:()=>{
+          closeModal();
+          showHoldModal(r);
+        }
+      }
     ]
   );
 }
 function showAdminRegister(r,read,master){
   showModal(
     "管理者社員番号",
-    `<input id="adminCodeInput" class="input big" inputmode="numeric" pattern="[0-9]*" autocomplete="off"><p id="adminMsg" class="msg"></p>`,
+    `<p>登録済みバーコードと違うため、管理者確認が必要です。</p>
+     <input id="adminCodeInput" class="input big" inputmode="numeric" pattern="[0-9]*" autocomplete="off">
+     <p id="adminMsg" class="msg"></p>`,
     [
       {
         label:"確認",
         kind:"primary",
         onClick:()=>{
-          const code=$("adminCodeInput").value.trim();
-          const admin=state.staffList.find(s=>s.staff_code===code&&s.active_flag==="1"&&s.is_admin==="1");
+          const code = $("adminCodeInput").value.trim();
+          const admin = state.staffList.find(s=>s.staff_code===code && s.active_flag==="1" && s.is_admin==="1");
 
           if(!admin){
-            $("adminMsg").textContent="管理者社員番号が確認できません";
+            $("adminMsg").textContent = "管理者社員番号が確認できません";
             return;
           }
 
           showModal(
-            "正しければ登録",
+            "管理者確認",
             `<p><strong>品番</strong><br>${r.sku}</p>
-             <p><strong>商品名</strong><br>${r.item_name||""}</p>
-             <p><strong>登録済</strong><br>${master||"登録なし"}</p>
+             <p><strong>商品名</strong><br>${r.item_name || ""}</p>
+             <p><strong>登録済みバーコード</strong><br>${master || "登録なし"}</p>
              <p><strong>今回読取</strong><br>${read}</p>
-             <p>このバーコードを管理者確認済みとして記録しますか？</p>`,
+             <p class="msg">
+               現物を確認して、処理を選んでください。<br>
+               商品は正しいが今回読取バーコードを登録しない場合は「商品OK・バーコードは登録しない」を選んでください。<br>
+               今回読取バーコードを今後の正しいバーコードにする場合だけ「バーコードを変更する」を選んでください。
+             </p>`,
             [
               {
-                label:"登録する",
+                label:"商品OK・バーコードは登録しない",
                 kind:"primary",
                 onClick:()=>{
-                  const arr=state.aliasMap.get(r.sku)||[];
-                  if(!arr.includes(read))arr.push(read);
-                  state.aliasMap.set(r.sku,arr);
+                  closeModal();
 
-                  markOk(r,"barcode_admin_alias",read,r.quantity);
-
-                  const res=getResult(r);
-                  if(res){
-                    res.admin_staff_code=admin.staff_code;
-                    res.barcode_register_flag="0";
-                    res.admin_review_required="1";
-                    res.memo="管理者確認済み・別バーコード";
+                  if(Number(r.quantity || 1) >= 2){
+                    showAdminBarcodeDecisionQuantityModal(r, read, master, admin.staff_code, "product_ok_no_register");
+                    return;
                   }
 
+                  completeAdminBarcodeDecision(r, read, master, admin.staff_code, "product_ok_no_register", "1");
+                }
+              },
+              {
+                label:"バーコードを変更する",
+                kind:"primary",
+                onClick:()=>{
                   closeModal();
-                  showMsg("itemMsg","管理者確認済みとして記録しました",true);
-                  setTimeout(goNextItem,800);
+
+                  if(Number(r.quantity || 1) >= 2){
+                    showAdminBarcodeDecisionQuantityModal(r, read, master, admin.staff_code, "replace_barcode");
+                    return;
+                  }
+
+                  completeAdminBarcodeDecision(r, read, master, admin.staff_code, "replace_barcode", "1");
+                }
+              },
+              {
+                label:"保留",
+                kind:"danger",
+                onClick:()=>{
+                  closeModal();
+                  showHoldModal(r);
                 }
               },
               {
                 label:"キャンセル",
                 onClick:()=>{
                   closeModal();
-                  focusBarcodeInput();
+                  showBarcodeMismatch(r, read, master);
                 }
               }
             ]
@@ -465,13 +600,11 @@ function showAdminRegister(r,read,master){
         label:"キャンセル",
         onClick:()=>{
           closeModal();
-          focusBarcodeInput();
+          showBarcodeMismatch(r, read, master);
         }
       }
     ]
   );
-
-
 
   setTimeout(()=>$("adminCodeInput")?.focus(),100);
 }
@@ -1224,19 +1357,20 @@ $("manualBtn").onclick=()=>{
   const r=state.currentItems[state.currentIndex];
   const hasMismatch = !!state.lastMismatchBarcode;
 
-  if(Number(r.quantity||1)>=2){
-    $("readValue").textContent = hasMismatch ? state.lastMismatchBarcode : "手動確認";
-    showQuantityModal(r, hasMismatch ? "manual_after_mismatch" : "manual");
-  }else{
-    if(hasMismatch){
-      markManualAfterMismatch(r, state.lastMismatchBarcode, state.lastMismatchMaster, "1");
-      showMsg("itemMsg","手動確認OK。読取バーコードを管理者確認待ちとして記録しました",true);
-    }else{
-      state.lastReadBarcode="";
-      markOk(r,"manual","","1");
-      showMsg("itemMsg","手動確認OK",true);
-    }
+  // バーコード不一致後は、スタッフ単独の手動OKは禁止。
+  // 必ず管理者確認画面へ戻す。
+  if(hasMismatch){
+    showBarcodeMismatch(r, state.lastMismatchBarcode, state.lastMismatchMaster);
+    return;
+  }
 
+  if(Number(r.quantity||1)>=2){
+    $("readValue").textContent = "手動確認";
+    showQuantityModal(r, "manual");
+  }else{
+    state.lastReadBarcode="";
+    markOk(r,"manual","","1");
+    showMsg("itemMsg","手動確認OK",true);
     setTimeout(goNextItem,600);
   }
 };
