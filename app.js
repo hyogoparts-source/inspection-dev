@@ -102,6 +102,66 @@ if(!itemRows.length && !processedRows.length)throw new Error("ITEM行またはPR
 if(!barcodeRows.length && !noBarcodeRows.length)throw new Error("BARCODE行またはNO_BARCODE行がありません");
 return{staffRows,itemRows,barcodeRows,aliasRows,noBarcodeRows,processedRows}}
 function normalizeBarcode(v){return String(v||"").replace(/[\s-]/g,"")}
+function normalizeSkuCode(v){
+  return normalizeBarcode(v)
+    .replace(/\*/g, "")
+    .toUpperCase();
+}
+
+function isMazdaPartCodeMatch(readBarcode, masterBarcode){
+  const read = normalizeSkuCode(readBarcode);
+  const master = normalizeSkuCode(masterBarcode);
+
+  if(!read || !master) return false;
+
+  // 短すぎる品番は誤判定防止のため対象外
+  if(master.length < 6) return false;
+
+  // そのまま一致
+  // 例：K123V1370
+  if(read === master) return true;
+
+  // 右1文字を除外して一致
+  // 例：K123V1370A → K123V1370
+  if(
+    read.length === master.length + 1 &&
+    read.startsWith(master)
+  ){
+    return true;
+  }
+
+  // 左1文字・右1文字を除外して一致
+  // 例：PK123V1370Z → K123V1370
+  if(
+    read.length === master.length + 2 &&
+    read.slice(1, -1) === master
+  ){
+    return true;
+  }
+
+  return false;
+}
+
+function isAllowedBarcodeForSku(sku, readBarcode){
+  const read = normalizeBarcode(readBarcode);
+  const skuCode = normalizeSkuCode(sku);
+  const masters = allowedBarcodes(sku);
+
+  return masters.some(master => {
+    const masterNorm = normalizeBarcode(master);
+
+    // 通常バーコードは今まで通り完全一致
+    if(read === masterNorm) return true;
+
+    // barcode_master に「ハイフンなし品番」が入っている場合だけ、
+    // 純正品番バーコードとして判定する
+    if(normalizeSkuCode(masterNorm) === skuCode){
+      return isMazdaPartCodeMatch(readBarcode, masterNorm);
+    }
+
+    return false;
+  });
+}
 function itemKey(r){return `${r.invoice_no}__${r.line_no}__${r.sku}`}
 function getResult(r){return state.results.find(x=>x.key===itemKey(r))}
 function setResult(r,d){const k=itemKey(r),e=state.results.find(x=>x.key===k);e?Object.assign(e,d):state.results.push({key:k,...d})}
@@ -286,11 +346,11 @@ function handleBarcode(raw){
 
   // BARCODE行またはALIAS行があるが、読取値が一致しない
   // → 管理者確認が必要なバーコード不一致
-  if(!allowed.includes(read)){
-    state.lastMismatchBarcode = read;
-    state.lastMismatchMaster = allowed[0] || "";
-    return showBarcodeMismatch(r, read, allowed[0] || "");
-  }
+  if(!isAllowedBarcodeForSku(r.sku, read)){
+  state.lastMismatchBarcode = read;
+  state.lastMismatchMaster = allowed[0] || "";
+  return showBarcodeMismatch(r, read, allowed[0] || "");
+}
 
   // 通常一致
   state.lastMismatchBarcode = "";
