@@ -391,11 +391,13 @@ html, body{
   opacity: 1 !important;
 }
 
-/* 保存後：次の送り状へボタンは必ず緑 */
+/* 保存後：次の送り状へ／作業終了を緑色にする */
 #nextInvoiceBtn.ready,
 #nextInvoiceBtn.ready:not(:disabled) {
-  background: var(--primary) !important;
+  background: #16a34a !important;
   color: #ffffff !important;
+  border-color: #15803d !important;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.14) !important;
   opacity: 1 !important;
 }
 
@@ -455,4 +457,67 @@ button {
   min-height: 0 !important;
   margin: 2px 0 !important;
   padding: 0 !important;
+}
+
+/* 完了画面：CSV保存を最優先にする */
+#completeView #saveResultBtn {
+  width: 100%;
+  min-height: 62px;
+  margin: 12px 0 10px;
+  font-size: 21px;
+  font-weight: 700;
+  border-radius: 14px;
+}
+
+#completeView #saveResultBtn:not(:disabled) {
+  background: #16a34a;
+  color: #ffffff;
+  border-color: #15803d;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.16);
+}
+
+#completeView #saveResultBtn:disabled,
+#completeView #saveResultBtn.saved {
+  background: #d1d5db;
+  color: #6b7280;
+  border-color: #cbd5e1;
+  box-shadow: none;
+  opacity: 1;
+}
+
+/* 次へは保存後に緑色にする */
+#completeView #nextInvoiceBtn {
+  width: 100%;
+  min-height: 54px;
+  margin: 6px 0 14px;
+  font-size: 19px;
+  font-weight: 700;
+  border-radius: 14px;
+  background: #ffffff;
+  color: #374151;
+  border: 2px solid #9ca3af;
+  box-shadow: none;
+}
+
+#completeView #nextInvoiceBtn.ready:not(:disabled) {
+  background: #16a34a;
+  color: #ffffff;
+  border-color: #15803d;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.14);
+}
+
+#completeView #nextInvoiceBtn:disabled {
+  background: #f3f4f6;
+  color: #9ca3af;
+  border-color: #d1d5db;
+  opacity: 1;
+}
+
+/* PC取込後に使う削除ボタン */
+#completeView #clearLocalResultsBtn {
+  width: 100%;
+  min-height: 48px;
+  margin-top: 20px;
+  font-size: 16px;
+  border-radius: 12px;
 }
