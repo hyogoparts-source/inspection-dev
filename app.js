@@ -1379,6 +1379,19 @@ $("barcodeInput").value="";
 handleBarcode(v)}});
 $("barcodeInput").addEventListener("change",e=>{const v=e.target.value;
 if(v){e.target.value="";handleBarcode(v)}});
+$("barcodeInput").addEventListener("input", e=>{
+  clearTimeout(barcodeInputTimer);
+
+  barcodeInputTimer = setTimeout(()=>{
+    const v = e.target.value;
+
+    if(v){
+      e.target.value = "";
+      handleBarcode(v);
+    }
+  }, 150);
+});
+
 document.querySelectorAll("[data-key]").forEach(btn=>btn.onclick=()=>{
   const k=btn.dataset.key;
   const input=$("checkedQtyInput");
