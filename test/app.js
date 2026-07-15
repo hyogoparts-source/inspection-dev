@@ -860,18 +860,25 @@ function renderComplete(){
     return;
   }
 
-  $("completeTitle").textContent = hold ? "保留" : "検品完了";
+    saveCurrentResultToLocal();
+  updateLocalResultCount();
+
+  const allDone = isAllBundleInvoicesCompletedOnThisDevice();
+
+  if(allDone){
+    $("completeTitle").textContent = "すべて完了";
+  }else{
+    $("completeTitle").textContent = hold ? "保留" : "検品完了";
+  }
 
   $("completeSummary").textContent =
+    (allDone ? "すべての送り状の検品が完了しました。\n\n" : "") +
     `送り状No：${state.currentInvoice}\n` +
     `注文番号：${items[0]?.order_no || ""}\n` +
     `商品数：${items.length}\n` +
     `OK：${ok}\n` +
     `保留：${hold}\n` +
     `未検品：${pending}`;
-
-  saveCurrentResultToLocal();
-  updateLocalResultCount();
 
   const saveBtn = $("saveResultBtn");
 
@@ -880,7 +887,6 @@ function renderComplete(){
   saveBtn.classList.add("primary");
   saveBtn.classList.remove("saved");
 
-  const allDone = isAllBundleInvoicesCompletedOnThisDevice();
   const hasUnsaved = hasUnsavedLocalResults();
   const nextBtn = $("nextInvoiceBtn");
 
