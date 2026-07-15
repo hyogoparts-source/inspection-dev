@@ -3,9 +3,6 @@ const state={staff:null,staffList:[],inspectionRows:[],processedRows:[],barcodeM
 const $=id=>document.getElementById(id);
 let barcodeInputTimer = null;
 
-// TEST: AsReader比較用。trueの間は商品詳細表示時に自動でキーボードを出さない。
-const ASREADER_BUTTON_TEST = true;
-let asreaderManualFocusRequest = false;
 function show(id){
   document.querySelectorAll(".view").forEach(v=>v.classList.remove("active"));
   $(id).classList.add("active");
@@ -58,11 +55,6 @@ function resetInvoiceScreen(){
 }
 
 function focusBarcodeInput(){
-  if(ASREADER_BUTTON_TEST && !asreaderManualFocusRequest){
-    return;
-  }
-
-  asreaderManualFocusRequest = false;
 
   const input = $("barcodeInput");
   if(!input) return;
@@ -265,11 +257,7 @@ $("readValue").textContent="スキャン待機中";$("itemMsg").textContent="";$
 
 updateStaffLabels();
 show("itemView");
-const scanBtn = $("scanEnableBtn");
-if(scanBtn){
-  scanBtn.textContent = "バーコード読取開始";
-  scanBtn.classList.remove("active");
-}
+
 focusBarcodeInput();
 }
 
@@ -499,6 +487,49 @@ function showModal(t,b,acts){$("modalTitle").textContent=t;$("modalBody").innerH
 .forEach(a=>{const btn=document.createElement("button");btn.className="btn "+(a.kind||"");btn
 .textContent=a.label;btn.onclick=a.onClick;$("modalActions").appendChild(btn)});$("modal").classList.remove("hidden")}
 function closeModal(){$("modal").classList.add("hidden")}
+
+function showBarcodeMismatch(r,read,master){
+  state.lastMismatchBarcode = read;
+  state.lastMismatchMaster = master || "";
+
+  showModal(
+    "登録済みバーコードと違います",
+    `<p><strong>品番</strong><br>${r.sku}</p>
+     <p><strong>登録済みバーコード</strong><br>${master || "登録なし"}</p>
+     <p><strong>今回読取</strong><br>${read}</p>
+     <p class="msg">
+       この商品には、すでに登録済みのバーコードがあります。<br>
+       読み間違いの可能性がある場合は再スキャンしてください。<br>
+       商品が正しいか判断が必要な場合は、管理者確認へ進んでください。
+     </p>`,
+    [
+      {
+        label:"再スキャン",
+        onClick:()=>{
+          state.lastReadBarcode = "";
+          state.lastMismatchBarcode = "";
+          state.lastMismatchMaster = "";
+          closeModal();
+          focusBarcodeInput();
+        }
+      },
+      {
+        label:"管理者確認",
+        kind:"primary",
+        onClick:()=>showAdminRegister(r,read,master)
+      },
+      {
+        label:"保留",
+        kind:"danger",
+        onClick:()=>{
+          closeModal();
+          showHoldModal(r);
+        }
+      }
+    ]
+  );
+}
+
 function showAdminRegister(r,read,master){
   showModal(
     "管理者社員番号",
