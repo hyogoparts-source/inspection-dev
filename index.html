@@ -5,8 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="出荷検品">
-  <title>HYOGO PARTS 出荷検品 TEST</title>
-  <link rel="stylesheet" href="./style.css?v=test20260714">
+  <title>HYOGO PARTS 出荷検品</title>
+  <link rel="stylesheet" href="./style.css">
 </head>
 <body>
 <main id="app">
@@ -102,13 +102,12 @@
   id="barcodeInput"
   class="hiddenInput"
   type="text"
-  inputmode="text"
+  inputmode="none"
   autocomplete="off"
   autocorrect="off"
   autocapitalize="off"
   spellcheck="false"
 >
-  <button id="scanEnableBtn" class="btn">バーコード読取開始</button>
   <p id="itemMsg" class="msg"></p>
   <div id="quantityPanel" class="quantityPanel hidden">
     <div class="small">数量確認</div>
@@ -139,18 +138,18 @@
     <div id="unsavedResultCount" class="strong">0件</div>
   </div>
 
-  <button id="saveResultBtn" class="btn">検品結果CSVを保存</button>
-<button id="nextInvoiceBtn" class="btn primary">次の送り状へ</button>
+  <button id="saveResultBtn" class="btn primary save-main">
+  検品結果CSVを保存
+</button>
 
-  <div id="adminResultTools" class="hidden">
-    <button id="viewLocalResultsBtn" class="btn">
-      端末内データを確認
-    </button>
+<button id="nextInvoiceBtn" class="btn next-action">
+  次の送り状へ
+</button>
 
-    <button id="clearLocalResultsBtn" class="btn danger">
-      端末内データをクリア
-    </button>
-  </div>
+<button id="clearLocalResultsBtn" class="btn danger clear-results">
+  PC取込済みデータをクリア
+</button>
+
 
   <p id="saveMsg" class="msg"></p>
 </section>
@@ -163,6 +162,6 @@
     <div id="modalActions" class="modalActions"></div>
   </div>
 </div>
-<script src="./app.js?v=test20260714"></script>
+<script src="./app.js"></script>
 </body>
 </html>
