@@ -2,6 +2,7 @@
 const state={staff:null,staffList:[],inspectionRows:[],processedRows:[],barcodeMap:new Map(),aliasMap:new Map(),noBarcodeSet:new Set(),currentInvoice:null,currentItems:[],currentIndex:0,results:[],startedAt:null,lastReadBarcode:"",lastMismatchBarcode:"",lastMismatchMaster:""};
 const $=id=>document.getElementById(id);
 let barcodeInputTimer = null;
+
 function show(id){
   document.querySelectorAll(".view").forEach(v=>v.classList.remove("active"));
   $(id).classList.add("active");
@@ -54,6 +55,7 @@ function resetInvoiceScreen(){
 }
 
 function focusBarcodeInput(){
+
   const input = $("barcodeInput");
   if(!input) return;
 
@@ -75,6 +77,12 @@ function focusBarcodeInput(){
   setTimeout(() => {
     input.focus();
   }, 50);
+
+  const btn = $("scanEnableBtn");
+  if(btn){
+    btn.textContent = "バーコード読取中";
+    btn.classList.add("active");
+  }
 }
 function nowText(){const d=new Date(),p=n=>String(n).padStart(2,"0");
 return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`}
@@ -162,6 +170,7 @@ function isAllowedBarcodeForSku(sku, readBarcode){
     return false;
   });
 }
+
 function itemKey(r){return `${r.invoice_no}__${r.line_no}__${r.sku}`}
 function getResult(r){return state.results.find(x=>x.key===itemKey(r))}
 function setResult(r,d){const k=itemKey(r),e=state.results.find(x=>x.key===k);e?Object.assign(e,d):state.results.push({key:k,...d})}
@@ -248,6 +257,7 @@ $("readValue").textContent="スキャン待機中";$("itemMsg").textContent="";$
 
 updateStaffLabels();
 show("itemView");
+
 focusBarcodeInput();
 }
 
@@ -477,6 +487,7 @@ function showModal(t,b,acts){$("modalTitle").textContent=t;$("modalBody").innerH
 .forEach(a=>{const btn=document.createElement("button");btn.className="btn "+(a.kind||"");btn
 .textContent=a.label;btn.onclick=a.onClick;$("modalActions").appendChild(btn)});$("modal").classList.remove("hidden")}
 function closeModal(){$("modal").classList.add("hidden")}
+
 function showBarcodeMismatch(r,read,master){
   state.lastMismatchBarcode = read;
   state.lastMismatchMaster = master || "";
@@ -518,6 +529,7 @@ function showBarcodeMismatch(r,read,master){
     ]
   );
 }
+
 function showAdminRegister(r,read,master){
   showModal(
     "管理者社員番号",
@@ -611,14 +623,14 @@ function showAdminRegister(r,read,master){
 
 function showNoBarcodeRegister(r, read){
   showModal(
-    "商品バーコード未登録",
+    "初回バーコード登録確認",
     `<p><strong>品番</strong><br>${r.sku}</p>
      <p><strong>商品名</strong><br>${r.item_name || ""}</p>
      <p><strong>今回読取</strong><br>${read}</p>
-     <p>この商品バーコードを登録候補として保存しますか？</p>`,
+     <p>この商品は、まだバーコードが登録されていません。<br>商品とバーコードが正しければ、このバーコードを初回バーコードとして登録します。</p>`,
     [
       {
-        label:"登録候補にする",
+        label:"このバーコードで登録してOK",
         kind:"primary",
         onClick:()=>{
           closeModal();
@@ -635,7 +647,7 @@ function showNoBarcodeRegister(r, read){
             res.master_barcode = "";
             res.barcode_register_flag = "1";
             res.admin_review_required = "0";
-            res.memo = "商品バーコード未登録・登録候補";
+            res.memo = "初回バーコード登録・スマホ確認済み";
           }
 
           // 同じCSV内で同じSKUが再度出た場合、同じバーコードを許可扱いにする
@@ -643,7 +655,7 @@ function showNoBarcodeRegister(r, read){
           if(!arr.includes(read)) arr.push(read);
           state.aliasMap.set(r.sku, arr);
 
-          showMsg("itemMsg", "商品バーコードを登録候補にしました", true);
+          showMsg("itemMsg", "初回バーコードとして記録しました", true);
           setTimeout(goNextItem, 800);
         }
       },
@@ -709,7 +721,7 @@ function showQuantityModalForNoBarcode(r, read){
             res.master_barcode = "";
             res.barcode_register_flag = "1";
             res.admin_review_required = "0";
-            res.memo = "商品バーコード未登録・登録候補";
+            res.memo = "初回バーコード登録・スマホ確認済み";
           }
 
           // 同じCSV内で同じSKUが再度出た場合、同じバーコードを許可扱いにする
@@ -717,7 +729,7 @@ function showQuantityModalForNoBarcode(r, read){
           if(!arr.includes(read)) arr.push(read);
           state.aliasMap.set(r.sku, arr);
 
-          showMsg("itemMsg", "商品バーコードを登録候補にしました", true);
+          showMsg("itemMsg", "初回バーコードとして記録しました", true);
           setTimeout(goNextItem, 600);
         }
       },
@@ -1353,6 +1365,14 @@ $("toOrderBtn").onclick = () => {
 
 $("holdBtn").onclick=()=>showHoldModal(state.currentItems[state.currentIndex]);
 
+if($("scanEnableBtn")){
+  $("scanEnableBtn").onclick = () => {
+    asreaderManualFocusRequest = true;
+    focusBarcodeInput();
+  };
+}
+
+
 $("manualBtn").onclick=()=>{
   const r=state.currentItems[state.currentIndex];
   const hasMismatch = !!state.lastMismatchBarcode;
@@ -1374,6 +1394,7 @@ $("manualBtn").onclick=()=>{
     setTimeout(goNextItem,600);
   }
 };
+
 $("barcodeInput").addEventListener("keydown",e=>{if(e.key==="Enter"){clearTimeout(barcodeInputTimer);const v=$("barcodeInput").value;
 $("barcodeInput").value="";
 handleBarcode(v)}});
