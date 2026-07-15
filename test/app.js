@@ -828,40 +828,75 @@ showModal("保留理由",`<div>${reasons.map(x=>`<button class="btn holdReason" 
 document.querySelectorAll(".holdReason").forEach(btn=>btn.onclick=()=>{markHold(r,btn.dataset.r,$("holdMemo").value||"");closeModal();renderOrder()})}
 
 function renderComplete(){
-  const items=state.currentItems;
-  const resultRows=items.map(i=>getResult(i)).filter(Boolean);
-  const ok=items.filter(i=>statusOf(i)==="OK").length;
-  const hold=items.filter(i=>statusOf(i)==="保留").length;
-  const pending=items.length-ok-hold;
+  const items = state.currentItems;
+  const resultRows = items.map(i => getResult(i)).filter(Boolean);
+  const ok = items.filter(i => statusOf(i) === "OK").length;
+  const hold = items.filter(i => statusOf(i) === "保留").length;
+  const pending = items.length - ok - hold;
 
-  if(pending>0 || resultRows.length<items.length){
-    showModal("未検品があります",
+  if(pending > 0 || resultRows.length < items.length){
+    showModal(
+      "未検品があります",
       `<p>この送り状の商品がまだすべて検品されていません。</p>
-       <p>商品数：${items.length}<br>OK：${ok}<br>保留：${hold}<br>未検品：${pending}</p>`,
-      [{label:"検品に戻る",kind:"primary",onClick:()=>{closeModal();const i=firstPendingIndex();state.currentIndex=i>=0?i:0;renderItem()}}]
+       <p>
+         商品数：${items.length}<br>
+         OK：${ok}<br>
+         保留：${hold}<br>
+         未検品：${pending}
+       </p>`,
+      [
+        {
+          label:"検品に戻る",
+          kind:"primary",
+          onClick:()=>{
+            closeModal();
+            const i = firstPendingIndex();
+            state.currentIndex = i >= 0 ? i : 0;
+            renderItem();
+          }
+        }
+      ]
     );
     return;
   }
 
-  $("completeTitle").textContent=hold?"保留":"検品完了";
-  $("completeSummary").textContent=
-    `送り状No：${state.currentInvoice}\n注文番号：${items[0]?.order_no||""}\n商品数：${items.length}\nOK：${ok}\n保留：${hold}\n未検品：${pending}`;
+  $("completeTitle").textContent = hold ? "保留" : "検品完了";
+
+  $("completeSummary").textContent =
+    `送り状No：${state.currentInvoice}\n` +
+    `注文番号：${items[0]?.order_no || ""}\n` +
+    `商品数：${items.length}\n` +
+    `OK：${ok}\n` +
+    `保留：${hold}\n` +
+    `未検品：${pending}`;
 
   saveCurrentResultToLocal();
   updateLocalResultCount();
 
-  $("saveResultBtn").disabled = false;
-  $("saveResultBtn").textContent = "検品結果CSVを保存";
-  $("saveResultBtn").classList.remove("primary");
-  $("saveResultBtn").classList.remove("saved");
+  const saveBtn = $("saveResultBtn");
+
+  saveBtn.disabled = false;
+  saveBtn.textContent = "検品結果CSVを保存";
+  saveBtn.classList.add("primary");
+  saveBtn.classList.remove("saved");
 
   const allDone = isAllBundleInvoicesCompletedOnThisDevice();
+  const hasUnsaved = hasUnsavedLocalResults();
+  const nextBtn = $("nextInvoiceBtn");
 
-$("nextInvoiceBtn").disabled = false;
-$("nextInvoiceBtn").textContent = allDone ? "作業終了" : "次の送り状へ";
-$("nextInvoiceBtn").classList.remove("hidden");
-$("nextInvoiceBtn").classList.add("primary");
-$("nextInvoiceBtn").classList.add("ready");
+  nextBtn.classList.remove("hidden");
+
+  if(hasUnsaved){
+    nextBtn.disabled = true;
+    nextBtn.textContent = "先に検品結果CSVを保存";
+    nextBtn.classList.remove("ready");
+    nextBtn.classList.remove("primary");
+  }else{
+    nextBtn.disabled = false;
+    nextBtn.textContent = allDone ? "作業終了" : "次の送り状へ";
+    nextBtn.classList.add("ready");
+    nextBtn.classList.add("primary");
+  }
 
   $("saveMsg").textContent = "端末内に検品結果を保存しました。";
 
@@ -1028,8 +1063,40 @@ if(saveBtn){
   saveBtn.classList.add("saved");
 }
 
+const nextBtn = $("nextInvoiceBtn");
+
+if(nextBtn){
+  nextBtn.disabled = false;
+  nextBtn.textContent =
+    isAllBundleInvoicesCompletedOnThisDevice()
+      ? "作業終了"
+      : "次の送り状へ";
+
+  nextBtn.classList.add("ready");
+  nextBtn.classList.add("primary");
+}
+
 showMsg("saveMsg", "検品結果CSVをまとめて保存しました。", true);
 }
+
+function hasUnsavedLocalResults(){
+  const rows = getLocalResults();
+  const exportedAt = getExportedAt();
+
+  if(rows.length === 0){
+    return false;
+  }
+
+  if(!exportedAt){
+    return true;
+  }
+
+  return rows.some(r => {
+    return !r.completed_at || r.completed_at > exportedAt;
+  });
+}
+
+
 
 function updateLocalResultCount(){
   const rows = getLocalResults();
