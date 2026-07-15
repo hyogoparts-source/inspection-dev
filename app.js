@@ -1007,9 +1007,16 @@ function downloadBatchCsv(){
   }, 1000);
 
   setExportedAt(nowText());
-  updateLocalResultCount();
+updateLocalResultCount();
 
-  showMsg("saveMsg", "検品結果CSVをまとめて保存しました。", true);
+const saveBtn = $("saveResultBtn");
+if(saveBtn){
+  saveBtn.disabled = true;
+  saveBtn.textContent = "保存済み";
+  saveBtn.classList.add("saved");
+}
+
+showMsg("saveMsg", "検品結果CSVをまとめて保存しました。", true);
 }
 
 function updateLocalResultCount(){
