@@ -1447,7 +1447,6 @@ $("holdBtn").onclick=()=>showHoldModal(state.currentItems[state.currentIndex]);
 
 if($("scanEnableBtn")){
   $("scanEnableBtn").onclick = () => {
-    asreaderManualFocusRequest = true;
     focusBarcodeInput();
   };
 }
