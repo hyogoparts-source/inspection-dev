@@ -1091,7 +1091,16 @@ function downloadBatchCsv(){
 
 updateNextInvoiceButton();
 
-  showMsg(
+const saveBtn = $("saveResultBtn");
+
+if(saveBtn){
+  saveBtn.disabled = true;
+  saveBtn.textContent = "保存済み";
+  saveBtn.classList.remove("primary");
+  saveBtn.classList.add("saved");
+}
+
+showMsg(
     "saveMsg",
     `${rows.length}件の検品結果CSVをまとめて保存しました。`,
     true
