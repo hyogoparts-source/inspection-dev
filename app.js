@@ -852,29 +852,6 @@ function renderComplete(){
   updateLocalResultCount();
 
   const allDone = isAllBundleInvoicesCompletedOnThisDevice();
-  
-  const bundleInvoices = getBundleInvoiceNos();
-
-const completedInvoices = Array.from(
-  new Set(
-    getLocalResults()
-      .map(r => normalizeInvoiceNo(r.invoice_no))
-      .filter(Boolean)
-  )
-);
-
-const incompleteInvoices = bundleInvoices.filter(
-  inv => !completedInvoices.includes(inv)
-);
-
-alert(
-  "CSV内の送り状：\n" +
-  bundleInvoices.join("\n") +
-  "\n\n端末内保存済み：\n" +
-  completedInvoices.join("\n") +
-  "\n\n未完了判定：\n" +
-  (incompleteInvoices.join("\n") || "なし")
-);
 
   if(allDone){
     $("completeTitle").textContent = "すべて完了";
