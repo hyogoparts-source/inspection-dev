@@ -868,14 +868,8 @@ function renderComplete(){
     `保留：${hold}\n` +
     `未検品：${pending}`;
 
-  const saveBtn = $("saveResultBtn");
-
-  saveBtn.disabled = false;
-  saveBtn.textContent = "検品結果CSVを保存";
-  saveBtn.classList.add("primary");
-  saveBtn.classList.remove("saved");
-
-updateNextInvoiceButton();
+  // 途中か全件完了かに応じて、主ボタンと途中保存を切り替える。
+  updateNextInvoiceButton();
 
   $("saveMsg").textContent = "端末内に検品結果を保存しました。";
 
@@ -931,31 +925,53 @@ function setExportedAt(value){
   localStorage.setItem(LOCAL_EXPORTED_AT_KEY, value || "");
 }
 
-function buildCurrentResultRows(){
+function buildCurrentResultRows(allRows = []){
   const completedAt = nowText();
 
   const invoiceStatus = state.currentItems.some(i => statusOf(i) === "保留") ? "HOLD" : "OK";
 
   return state.results
     .filter(r => r.invoice_no === state.currentInvoice)
-    .map((r, i) => ({
-      result_id: `${state.currentInvoice}_${r.line_no || i + 1}_${r.sku || ""}`,
-      invoice_status: invoiceStatus,
-      barcode_register_flag: r.barcode_register_flag || "0",
-      admin_review_required: r.admin_review_required || "0",
-      ...r,
-      completed_at: completedAt
-    }));
+    .map((r, i) => {
+      const resultId = `${state.currentInvoice}_${r.line_no || i + 1}_${r.sku || ""}`;
+
+      const existing = allRows.find(x =>
+        String(x.result_id || "") === resultId &&
+        String(x.invoice_no || "") === String(r.invoice_no || "") &&
+        String(x.order_no || "") === String(r.order_no || "") &&
+        String(x.line_no || "") === String(r.line_no || "") &&
+        String(x.sku || "") === String(r.sku || "")
+      );
+
+      // 完了画面を開き直しただけなら、前回のcompleted_atを維持する。
+      // 再検品などでchecked_atが変わった場合だけ、新しい完了時刻にする。
+      const keepCompletedAt =
+        existing &&
+        String(existing.checked_at || "") === String(r.checked_at || "") &&
+        String(existing.status || "") === String(r.status || "") &&
+        String(existing.checked_quantity || "") === String(r.checked_quantity || "") &&
+        String(existing.read_barcode || "") === String(r.read_barcode || "");
+
+      return {
+        result_id: resultId,
+        invoice_status: invoiceStatus,
+        barcode_register_flag: r.barcode_register_flag || "0",
+        admin_review_required: r.admin_review_required || "0",
+        ...r,
+        completed_at: keepCompletedAt
+          ? String(existing.completed_at || completedAt)
+          : completedAt
+      };
+    });
 }
 
 function saveCurrentResultToLocal(){
-  const currentRows = buildCurrentResultRows();
+  const allRows = getLocalResults();
+  const currentRows = buildCurrentResultRows(allRows);
 
   if(currentRows.length === 0){
     return;
   }
-
-  const allRows = getLocalResults();
 
   currentRows.forEach(row => {
     const key = [
@@ -1091,15 +1107,6 @@ function downloadBatchCsv(){
 
 updateNextInvoiceButton();
 
-const saveBtn = $("saveResultBtn");
-
-if(saveBtn){
-  saveBtn.disabled = true;
-  saveBtn.textContent = "保存済み";
-  saveBtn.classList.remove("primary");
-  saveBtn.classList.add("saved");
-}
-
 showMsg(
     "saveMsg",
     `${rows.length}件の検品結果CSVをまとめて保存しました。`,
@@ -1130,23 +1137,56 @@ function hasUnsavedLocalResults(){
 
 function updateNextInvoiceButton(){
   const nextBtn = $("nextInvoiceBtn");
+  const saveBtn = $("saveResultBtn");
   if(!nextBtn) return;
 
-  const hasUnsaved = hasUnsavedLocalResults();
+  const hasUnexported = hasUnsavedLocalResults();
   const allDone = isAllBundleInvoicesCompletedOnThisDevice();
 
   nextBtn.classList.remove("hidden");
 
-  if(hasUnsaved){
+  if(!allDone){
+    // 途中の送り状では「次の送り状へ」を主操作にする。
+    // CSVは必要な場合だけ押す「途中保存」とする。
+    nextBtn.disabled = false;
+    nextBtn.textContent = "次の送り状へ";
+    nextBtn.classList.add("ready");
+    nextBtn.classList.add("primary");
+
+    if(saveBtn){
+      saveBtn.disabled = !hasUnexported;
+      saveBtn.textContent = hasUnexported ? "途中保存" : "途中保存済み";
+      saveBtn.classList.remove("primary");
+      saveBtn.classList.toggle("saved", !hasUnexported);
+    }
+    return;
+  }
+
+  // 全送り状完了後は、未出力データをCSV保存してから作業終了する。
+  if(hasUnexported){
     nextBtn.disabled = true;
     nextBtn.textContent = "先に検品結果CSVを保存";
     nextBtn.classList.remove("ready");
     nextBtn.classList.remove("primary");
+
+    if(saveBtn){
+      saveBtn.disabled = false;
+      saveBtn.textContent = "検品結果CSVを保存";
+      saveBtn.classList.add("primary");
+      saveBtn.classList.remove("saved");
+    }
   }else{
     nextBtn.disabled = false;
-    nextBtn.textContent = allDone ? "作業終了" : "次の送り状へ";
+    nextBtn.textContent = "作業終了";
     nextBtn.classList.add("ready");
     nextBtn.classList.add("primary");
+
+    if(saveBtn){
+      saveBtn.disabled = true;
+      saveBtn.textContent = "保存済み";
+      saveBtn.classList.remove("primary");
+      saveBtn.classList.add("saved");
+    }
   }
 }
 
