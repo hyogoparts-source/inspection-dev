@@ -521,3 +521,30 @@ button {
   font-size: 16px;
   border-radius: 12px;
 }
+/* 途中保存：通常時は白・グレー */
+#saveResultBtn:not(.primary):not(.saved) {
+  background: #ffffff !important;
+  color: #374151 !important;
+  border: 2px solid #9ca3af !important;
+}
+
+/* 次の送り状へ／作業終了：主操作は緑 */
+#nextInvoiceBtn.primary {
+  background: #16a34a !important;
+  color: #ffffff !important;
+  border-color: #16a34a !important;
+}
+
+/* 全件完了時のCSV保存：緑 */
+#saveResultBtn.primary {
+  background: #16a34a !important;
+  color: #ffffff !important;
+  border-color: #16a34a !important;
+}
+
+/* CSV保存後：灰色 */
+#saveResultBtn.saved {
+  background: #d1d5db !important;
+  color: #4b5563 !important;
+  border-color: #d1d5db !important;
+}
