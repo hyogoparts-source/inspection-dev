@@ -1006,39 +1006,91 @@ function saveCurrentResultToLocal(){
   updateLocalResultCount();
 }
 
-function buildBatchResultCsv(){
+// 前回のCSV出力後に追加・更新された行だけを取得する
+function getUnexportedResultRows(){
   const rows = getLocalResults();
+  const exportedAt = getExportedAt();
 
+  if(!exportedAt){
+    return rows;
+  }
+
+  return rows.filter(row => {
+    const completedAt = String(row.completed_at || "");
+    return completedAt === "" || completedAt > exportedAt;
+  });
+}
+
+
+// 指定された行だけでCSVを作る
+function buildBatchResultCsv(rows){
   return [
     RESULT_HEADERS.join(","),
-    ...rows.map(r => RESULT_HEADERS.map(h => csvEscape(r[h])).join(","))
+    ...rows.map(row =>
+      RESULT_HEADERS.map(header => csvEscape(row[header])).join(",")
+    )
   ].join("\r\n");
 }
 
-function downloadBatchCsv(){
-  saveCurrentResultToLocal();
 
-  const rows = getLocalResults();
+// CSV内に含まれる社員番号をファイル名用にまとめる
+function buildResultStaffCodeText(rows){
+  const staffCodes = [];
+
+  rows.forEach(row => {
+    const code = String(row.staff_code || "").trim();
+
+    if(code && !staffCodes.includes(code)){
+      staffCodes.push(code);
+    }
+  });
+
+  if(staffCodes.length === 0){
+    return "unknown";
+  }
+
+  return staffCodes.join("-");
+}
+
+
+function downloadBatchCsv(){
+  // renderComplete()ですでに端末内保存されているため、
+  // ここでは再保存してcompleted_atを変更しない
+  const rows = getUnexportedResultRows();
 
   if(rows.length === 0){
-    showMsg("saveMsg", "保存する検品結果がありません。", false);
+    showMsg(
+      "saveMsg",
+      "CSVへ出力していない検品結果はありません。",
+      false
+    );
+    updateLocalResultCount();
     return;
   }
 
-  const csv = "\uFEFF" + buildBatchResultCsv();
+  const csv = "\uFEFF" + buildBatchResultCsv(rows);
 
   const d = new Date();
   const p = n => String(n).padStart(2, "0");
 
-  const name =
-    `inspection_result_batch_${d.getFullYear()}${p(d.getMonth()+1)}${p(d.getDate())}_${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}.csv`;
+  const staffCodeText = buildResultStaffCodeText(rows);
 
-  const blob = new Blob([csv], {type:"text/csv;charset=utf-8"});
+  const name =
+    `inspection_result_${staffCodeText}_` +
+    `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}_` +
+    `${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}.csv`;
+
+  const blob = new Blob(
+    [csv],
+    {type: "text/csv;charset=utf-8"}
+  );
+
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
 
   a.href = url;
   a.download = name;
+
   document.body.appendChild(a);
   a.click();
   a.remove();
@@ -1047,52 +1099,22 @@ function downloadBatchCsv(){
     URL.revokeObjectURL(url);
   }, 1000);
 
+  // 今回CSVに出力した時点を保存する
   setExportedAt(nowText());
-updateLocalResultCount();
 
-const saveBtn = $("saveResultBtn");
-if(saveBtn){
-  saveBtn.disabled = true;
-  saveBtn.textContent = "保存済み";
-  saveBtn.classList.add("saved");
-}
-const nextBtn = $("nextInvoiceBtn");
+  updateLocalResultCount();
 
-if(nextBtn){
-  nextBtn.disabled = false;
-  nextBtn.textContent =
-    isAllBundleInvoicesCompletedOnThisDevice()
-      ? "作業終了"
-      : "次の送り状へ";
-
-  nextBtn.classList.add("ready");
-  nextBtn.classList.add("primary");
-}
-
-showMsg("saveMsg", "検品結果CSVをまとめて保存しました。", true);
-}
-
-function hasUnsavedLocalResults(){
-  const rows = getLocalResults();
-  const exportedAt = getExportedAt();
-
-  if(rows.length === 0){
-    return false;
-  }
-
-  if(!exportedAt){
-    return true;
-  }
-
-  return rows.some(r => {
-    return !r.completed_at || r.completed_at > exportedAt;
-  });
+  showMsg(
+    "saveMsg",
+    `${rows.length}件の検品結果CSVをまとめて保存しました。`,
+    true
+  );
 }
 
 
 function updateLocalResultCount(){
   const rows = getLocalResults();
-  const exportedAt = getExportedAt();
+  const unsavedRows = getUnexportedResultRows();
 
   const localCountEl = $("localResultCount");
   const unsavedCountEl = $("unsavedResultCount");
@@ -1102,16 +1124,12 @@ function updateLocalResultCount(){
   }
 
   if(unsavedCountEl){
-    if(!exportedAt){
-      unsavedCountEl.textContent = `${rows.length}件`;
-    }else{
-      const unsavedRows = rows.filter(r => {
-        return !r.completed_at || r.completed_at > exportedAt;
-      });
-
-      unsavedCountEl.textContent = `${unsavedRows.length}件`;
-    }
+    unsavedCountEl.textContent = `${unsavedRows.length}件`;
   }
+}
+
+function hasUnsavedLocalResults(){
+  return getUnexportedResultRows().length > 0;
 }
 
 function getBundleInvoiceNos(){
@@ -1488,14 +1506,13 @@ if($("clearLocalResultsBtn")){
   $("clearLocalResultsBtn").onclick = clearLocalResultsAdmin;
 }
 $("nextInvoiceBtn").onclick = () => {
-  saveCurrentResultToLocal();
-
   $("nextInvoiceBtn").classList.add("hidden");
   $("saveMsg").textContent = "";
 
   show("scanInvoiceView");
   resetInvoiceScreen();
 };
+
 document.addEventListener("visibilitychange", ()=>{
   if(document.visibilityState === "visible"){
     const activeView = document.querySelector(".view.active");
