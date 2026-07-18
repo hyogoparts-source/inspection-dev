@@ -870,12 +870,19 @@ function renderComplete(){
 
   const saveBtn = $("saveResultBtn");
 
-  saveBtn.disabled = false;
-  saveBtn.textContent = "検品結果CSVを保存";
-  saveBtn.classList.add("primary");
-  saveBtn.classList.remove("saved");
+  if(allDone){
+    saveBtn.disabled = false;
+    saveBtn.textContent = "検品結果CSVをまとめて保存";
+    saveBtn.classList.remove("hidden");
+    saveBtn.classList.add("primary");
+    saveBtn.classList.remove("saved");
+  }else{
+    saveBtn.disabled = true;
+    saveBtn.classList.add("hidden");
+    saveBtn.classList.remove("primary");
+  }
 
-updateNextInvoiceButton();
+  updateNextInvoiceButton();
 
   $("saveMsg").textContent = "端末内に検品結果を保存しました。";
 
@@ -1133,16 +1140,24 @@ function updateNextInvoiceButton(){
   const hasUnsaved = hasUnsavedLocalResults();
   const allDone = isAllBundleInvoicesCompletedOnThisDevice();
 
-  nextBtn.classList.remove("hidden");
+  if(!allDone){
+    nextBtn.classList.remove("hidden");
+    nextBtn.disabled = false;
+    nextBtn.textContent = "次の送り状へ";
+    nextBtn.classList.add("ready");
+    nextBtn.classList.add("primary");
+    return;
+  }
 
   if(hasUnsaved){
+    nextBtn.classList.add("hidden");
     nextBtn.disabled = true;
-    nextBtn.textContent = "先に検品結果CSVを保存";
     nextBtn.classList.remove("ready");
     nextBtn.classList.remove("primary");
   }else{
+    nextBtn.classList.remove("hidden");
     nextBtn.disabled = false;
-    nextBtn.textContent = allDone ? "作業終了" : "次の送り状へ";
+    nextBtn.textContent = "作業終了";
     nextBtn.classList.add("ready");
     nextBtn.classList.add("primary");
   }
