@@ -2,6 +2,7 @@
 const state={staff:null,staffList:[],inspectionRows:[],processedRows:[],barcodeMap:new Map(),aliasMap:new Map(),noBarcodeSet:new Set(),currentInvoice:null,currentItems:[],currentIndex:0,results:[],startedAt:null,lastReadBarcode:"",lastMismatchBarcode:"",lastMismatchMaster:""};
 const $=id=>document.getElementById(id);
 let barcodeInputTimer = null;
+
 function show(id){
   document.querySelectorAll(".view").forEach(v=>v.classList.remove("active"));
   $(id).classList.add("active");
@@ -54,6 +55,7 @@ function resetInvoiceScreen(){
 }
 
 function focusBarcodeInput(){
+
   const input = $("barcodeInput");
   if(!input) return;
 
@@ -75,6 +77,12 @@ function focusBarcodeInput(){
   setTimeout(() => {
     input.focus();
   }, 50);
+
+  const btn = $("scanEnableBtn");
+  if(btn){
+    btn.textContent = "バーコード読取中";
+    btn.classList.add("active");
+  }
 }
 function nowText(){const d=new Date(),p=n=>String(n).padStart(2,"0");
 return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`}
@@ -162,6 +170,7 @@ function isAllowedBarcodeForSku(sku, readBarcode){
     return false;
   });
 }
+
 function itemKey(r){return `${r.invoice_no}__${r.line_no}__${r.sku}`}
 function getResult(r){return state.results.find(x=>x.key===itemKey(r))}
 function setResult(r,d){const k=itemKey(r),e=state.results.find(x=>x.key===k);e?Object.assign(e,d):state.results.push({key:k,...d})}
@@ -248,6 +257,7 @@ $("readValue").textContent="スキャン待機中";$("itemMsg").textContent="";$
 
 updateStaffLabels();
 show("itemView");
+
 focusBarcodeInput();
 }
 
@@ -477,6 +487,7 @@ function showModal(t,b,acts){$("modalTitle").textContent=t;$("modalBody").innerH
 .forEach(a=>{const btn=document.createElement("button");btn.className="btn "+(a.kind||"");btn
 .textContent=a.label;btn.onclick=a.onClick;$("modalActions").appendChild(btn)});$("modal").classList.remove("hidden")}
 function closeModal(){$("modal").classList.add("hidden")}
+
 function showBarcodeMismatch(r,read,master){
   state.lastMismatchBarcode = read;
   state.lastMismatchMaster = master || "";
@@ -518,6 +529,7 @@ function showBarcodeMismatch(r,read,master){
     ]
   );
 }
+
 function showAdminRegister(r,read,master){
   showModal(
     "管理者社員番号",
@@ -611,14 +623,14 @@ function showAdminRegister(r,read,master){
 
 function showNoBarcodeRegister(r, read){
   showModal(
-    "商品バーコード未登録",
+    "初回バーコード登録確認",
     `<p><strong>品番</strong><br>${r.sku}</p>
      <p><strong>商品名</strong><br>${r.item_name || ""}</p>
      <p><strong>今回読取</strong><br>${read}</p>
-     <p>この商品バーコードを登録候補として保存しますか？</p>`,
+     <p>この商品は、まだバーコードが登録されていません。<br>商品とバーコードが正しければ、このバーコードを初回バーコードとして登録します。</p>`,
     [
       {
-        label:"登録候補にする",
+        label:"このバーコードで登録してOK",
         kind:"primary",
         onClick:()=>{
           closeModal();
@@ -635,7 +647,7 @@ function showNoBarcodeRegister(r, read){
             res.master_barcode = "";
             res.barcode_register_flag = "1";
             res.admin_review_required = "0";
-            res.memo = "商品バーコード未登録・登録候補";
+            res.memo = "初回バーコード登録・スマホ確認済み";
           }
 
           // 同じCSV内で同じSKUが再度出た場合、同じバーコードを許可扱いにする
@@ -643,7 +655,7 @@ function showNoBarcodeRegister(r, read){
           if(!arr.includes(read)) arr.push(read);
           state.aliasMap.set(r.sku, arr);
 
-          showMsg("itemMsg", "商品バーコードを登録候補にしました", true);
+          showMsg("itemMsg", "初回バーコードとして記録しました", true);
           setTimeout(goNextItem, 800);
         }
       },
@@ -709,7 +721,7 @@ function showQuantityModalForNoBarcode(r, read){
             res.master_barcode = "";
             res.barcode_register_flag = "1";
             res.admin_review_required = "0";
-            res.memo = "商品バーコード未登録・登録候補";
+            res.memo = "初回バーコード登録・スマホ確認済み";
           }
 
           // 同じCSV内で同じSKUが再度出た場合、同じバーコードを許可扱いにする
@@ -717,7 +729,7 @@ function showQuantityModalForNoBarcode(r, read){
           if(!arr.includes(read)) arr.push(read);
           state.aliasMap.set(r.sku, arr);
 
-          showMsg("itemMsg", "商品バーコードを登録候補にしました", true);
+          showMsg("itemMsg", "初回バーコードとして記録しました", true);
           setTimeout(goNextItem, 600);
         }
       },
@@ -868,7 +880,13 @@ function renderComplete(){
     `保留：${hold}\n` +
     `未検品：${pending}`;
 
-  // 途中か全件完了かに応じて、主ボタンと途中保存を切り替える。
+  const saveBtn = $("saveResultBtn");
+
+  saveBtn.disabled = false;
+  saveBtn.textContent = "検品結果CSVを保存";
+  saveBtn.classList.add("primary");
+  saveBtn.classList.remove("saved");
+
   updateNextInvoiceButton();
 
   $("saveMsg").textContent = "端末内に検品結果を保存しました。";
@@ -925,53 +943,31 @@ function setExportedAt(value){
   localStorage.setItem(LOCAL_EXPORTED_AT_KEY, value || "");
 }
 
-function buildCurrentResultRows(allRows = []){
+function buildCurrentResultRows(){
   const completedAt = nowText();
 
   const invoiceStatus = state.currentItems.some(i => statusOf(i) === "保留") ? "HOLD" : "OK";
 
   return state.results
     .filter(r => r.invoice_no === state.currentInvoice)
-    .map((r, i) => {
-      const resultId = `${state.currentInvoice}_${r.line_no || i + 1}_${r.sku || ""}`;
-
-      const existing = allRows.find(x =>
-        String(x.result_id || "") === resultId &&
-        String(x.invoice_no || "") === String(r.invoice_no || "") &&
-        String(x.order_no || "") === String(r.order_no || "") &&
-        String(x.line_no || "") === String(r.line_no || "") &&
-        String(x.sku || "") === String(r.sku || "")
-      );
-
-      // 完了画面を開き直しただけなら、前回のcompleted_atを維持する。
-      // 再検品などでchecked_atが変わった場合だけ、新しい完了時刻にする。
-      const keepCompletedAt =
-        existing &&
-        String(existing.checked_at || "") === String(r.checked_at || "") &&
-        String(existing.status || "") === String(r.status || "") &&
-        String(existing.checked_quantity || "") === String(r.checked_quantity || "") &&
-        String(existing.read_barcode || "") === String(r.read_barcode || "");
-
-      return {
-        result_id: resultId,
-        invoice_status: invoiceStatus,
-        barcode_register_flag: r.barcode_register_flag || "0",
-        admin_review_required: r.admin_review_required || "0",
-        ...r,
-        completed_at: keepCompletedAt
-          ? String(existing.completed_at || completedAt)
-          : completedAt
-      };
-    });
+    .map((r, i) => ({
+      result_id: `${state.currentInvoice}_${r.line_no || i + 1}_${r.sku || ""}`,
+      invoice_status: invoiceStatus,
+      barcode_register_flag: r.barcode_register_flag || "0",
+      admin_review_required: r.admin_review_required || "0",
+      ...r,
+      completed_at: completedAt
+    }));
 }
 
 function saveCurrentResultToLocal(){
-  const allRows = getLocalResults();
-  const currentRows = buildCurrentResultRows(allRows);
+  const currentRows = buildCurrentResultRows();
 
   if(currentRows.length === 0){
     return;
   }
+
+  const allRows = getLocalResults();
 
   currentRows.forEach(row => {
     const key = [
@@ -1074,10 +1070,8 @@ function downloadBatchCsv(){
   const d = new Date();
   const p = n => String(n).padStart(2, "0");
 
-  const staffCodeText = buildResultStaffCodeText(rows);
-
   const name =
-    `inspection_result_${staffCodeText}_` +
+    `inspection_result_batch_` +
     `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}_` +
     `${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}.csv`;
 
@@ -1107,7 +1101,7 @@ function downloadBatchCsv(){
 
 updateNextInvoiceButton();
 
-showMsg(
+  showMsg(
     "saveMsg",
     `${rows.length}件の検品結果CSVをまとめて保存しました。`,
     true
@@ -1137,56 +1131,23 @@ function hasUnsavedLocalResults(){
 
 function updateNextInvoiceButton(){
   const nextBtn = $("nextInvoiceBtn");
-  const saveBtn = $("saveResultBtn");
   if(!nextBtn) return;
 
-  const hasUnexported = hasUnsavedLocalResults();
+  const hasUnsaved = hasUnsavedLocalResults();
   const allDone = isAllBundleInvoicesCompletedOnThisDevice();
 
   nextBtn.classList.remove("hidden");
 
-  if(!allDone){
-    // 途中の送り状では「次の送り状へ」を主操作にする。
-    // CSVは必要な場合だけ押す「途中保存」とする。
-    nextBtn.disabled = false;
-    nextBtn.textContent = "次の送り状へ";
-    nextBtn.classList.add("ready");
-    nextBtn.classList.add("primary");
-
-    if(saveBtn){
-      saveBtn.disabled = !hasUnexported;
-      saveBtn.textContent = hasUnexported ? "途中保存" : "途中保存済み";
-      saveBtn.classList.remove("primary");
-      saveBtn.classList.toggle("saved", !hasUnexported);
-    }
-    return;
-  }
-
-  // 全送り状完了後は、未出力データをCSV保存してから作業終了する。
-  if(hasUnexported){
+  if(hasUnsaved){
     nextBtn.disabled = true;
     nextBtn.textContent = "先に検品結果CSVを保存";
     nextBtn.classList.remove("ready");
     nextBtn.classList.remove("primary");
-
-    if(saveBtn){
-      saveBtn.disabled = false;
-      saveBtn.textContent = "検品結果CSVを保存";
-      saveBtn.classList.add("primary");
-      saveBtn.classList.remove("saved");
-    }
   }else{
     nextBtn.disabled = false;
-    nextBtn.textContent = "作業終了";
+    nextBtn.textContent = allDone ? "作業終了" : "次の送り状へ";
     nextBtn.classList.add("ready");
     nextBtn.classList.add("primary");
-
-    if(saveBtn){
-      saveBtn.disabled = true;
-      saveBtn.textContent = "保存済み";
-      saveBtn.classList.remove("primary");
-      saveBtn.classList.add("saved");
-    }
   }
 }
 
@@ -1507,6 +1468,13 @@ $("toOrderBtn").onclick = () => {
 
 $("holdBtn").onclick=()=>showHoldModal(state.currentItems[state.currentIndex]);
 
+if($("scanEnableBtn")){
+  $("scanEnableBtn").onclick = () => {
+    focusBarcodeInput();
+  };
+}
+
+
 $("manualBtn").onclick=()=>{
   const r=state.currentItems[state.currentIndex];
   const hasMismatch = !!state.lastMismatchBarcode;
@@ -1528,6 +1496,7 @@ $("manualBtn").onclick=()=>{
     setTimeout(goNextItem,600);
   }
 };
+
 $("barcodeInput").addEventListener("keydown",e=>{if(e.key==="Enter"){clearTimeout(barcodeInputTimer);const v=$("barcodeInput").value;
 $("barcodeInput").value="";
 handleBarcode(v)}});
@@ -1631,7 +1600,6 @@ $("nextInvoiceBtn").onclick = () => {
     ]
   );
 };
-
 document.addEventListener("visibilitychange", ()=>{
   if(document.visibilityState === "visible"){
     const activeView = document.querySelector(".view.active");
