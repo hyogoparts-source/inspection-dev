@@ -164,7 +164,18 @@ function isAllowedBarcodeForSku(sku, readBarcode){
 }
 function itemKey(r){return `${r.invoice_no}__${r.line_no}__${r.sku}`}
 function getResult(r){return state.results.find(x=>x.key===itemKey(r))}
-function setResult(r,d){const k=itemKey(r),e=state.results.find(x=>x.key===k);e?Object.assign(e,d):state.results.push({key:k,...d})}
+function setResult(r,d){
+  const k=itemKey(r);
+  const e=state.results.find(x=>x.key===k);
+
+  if(e){
+    Object.assign(e,d);
+  }else{
+    state.results.push({key:k,...d});
+  }
+
+  saveProgressToLocal();
+}
 function allowedBarcodes(sku){const a=[];if(state.barcodeMap.has(sku))a.push(state.barcodeMap.get(sku));
 if(state.aliasMap.has(sku))a.push(...state.aliasMap.get(sku));
 return a.map(normalizeBarcode).filter(Boolean)}
@@ -289,6 +300,7 @@ function markManualAfterMismatch(r, read, master, qty){
     res.barcode_register_flag = "1";
     res.admin_review_required = "1";
     res.memo = "バーコード不一致後に手動確認・管理者確認待ち";
+    saveProgressToLocal();
   }
 }
 
@@ -302,6 +314,7 @@ function markAdminProductOkBarcodeWrong(r, read, master, adminCode, qty){
     res.barcode_register_flag = "0";
     res.admin_review_required = "0";
     res.memo = "商品は管理者確認済み。読取バーコードは登録しない";
+    saveProgressToLocal();
   }
 }
 
@@ -315,6 +328,7 @@ function markBarcodeReplaceAdmin(r, read, master, adminCode, qty){
     res.barcode_register_flag = "1";
     res.admin_review_required = "0";
     res.memo = "管理者現物確認済み。登録済みバーコードを変更";
+    saveProgressToLocal();
   }
 }
 
@@ -636,6 +650,7 @@ function showNoBarcodeRegister(r, read){
             res.barcode_register_flag = "1";
             res.admin_review_required = "0";
             res.memo = "商品バーコード未登録・登録候補";
+            saveProgressToLocal();
           }
 
           // 同じCSV内で同じSKUが再度出た場合、同じバーコードを許可扱いにする
@@ -710,6 +725,7 @@ function showQuantityModalForNoBarcode(r, read){
             res.barcode_register_flag = "1";
             res.admin_review_required = "0";
             res.memo = "商品バーコード未登録・登録候補";
+            saveProgressToLocal();
           }
 
           // 同じCSV内で同じSKUが再度出た場合、同じバーコードを許可扱いにする
@@ -869,17 +885,22 @@ function renderComplete(){
     `未検品：${pending}`;
 
   const saveBtn = $("saveResultBtn");
+  const hasUnexported = hasUnsavedLocalResults();
 
-  if(allDone){
-    saveBtn.disabled = false;
-    saveBtn.textContent = "検品結果CSVをまとめて保存";
+  if(saveBtn){
     saveBtn.classList.remove("hidden");
-    saveBtn.classList.add("primary");
-    saveBtn.classList.remove("saved");
-  }else{
-    saveBtn.disabled = true;
-    saveBtn.classList.add("hidden");
-    saveBtn.classList.remove("primary");
+
+    if(hasUnexported){
+      saveBtn.disabled = false;
+      saveBtn.textContent = "検品結果CSVをまとめて保存";
+      saveBtn.classList.add("primary");
+      saveBtn.classList.remove("saved");
+    }else{
+      saveBtn.disabled = true;
+      saveBtn.textContent = "保存済み";
+      saveBtn.classList.remove("primary");
+      saveBtn.classList.add("saved");
+    }
   }
 
   updateNextInvoiceButton();
@@ -893,6 +914,7 @@ function renderComplete(){
 
 const LOCAL_RESULTS_KEY = "hyogo_parts_inspection_results_v1";
 const LOCAL_EXPORTED_AT_KEY = "hyogo_parts_inspection_exported_at_v1";
+const LOCAL_PROGRESS_KEY = "hyogo_parts_inspection_progress_v1";
 
 const RESULT_HEADERS = [
   "result_id",
@@ -917,6 +939,46 @@ const RESULT_HEADERS = [
   "completed_at",
   "memo"
 ];
+
+function getLocalProgress(){
+  try{
+    return JSON.parse(localStorage.getItem(LOCAL_PROGRESS_KEY) || "[]");
+  }catch(e){
+    return [];
+  }
+}
+
+function saveProgressToLocal(){
+  localStorage.setItem(
+    LOCAL_PROGRESS_KEY,
+    JSON.stringify(state.results || [])
+  );
+}
+
+function restoreResultsFromLocal(){
+  const validKeys = new Set(
+    (state.inspectionRows || []).map(r => itemKey(r))
+  );
+
+  const merged = new Map();
+
+  getLocalResults().forEach(row => {
+    const key = row.key || itemKey(row);
+    if(validKeys.has(key)){
+      merged.set(key, {...row, key});
+    }
+  });
+
+  getLocalProgress().forEach(row => {
+    const key = row.key || itemKey(row);
+    if(validKeys.has(key)){
+      merged.set(key, {...row, key});
+    }
+  });
+
+  state.results = Array.from(merged.values());
+  saveProgressToLocal();
+}
 
 function getLocalResults(){
   try{
@@ -1093,17 +1155,16 @@ function downloadBatchCsv(){
   setExportedAt(nowText());
 
   updateLocalResultCount();
+  updateNextInvoiceButton();
 
-updateNextInvoiceButton();
+  const saveBtn = $("saveResultBtn");
 
-const saveBtn = $("saveResultBtn");
-
-if(saveBtn){
-  saveBtn.disabled = true;
-  saveBtn.textContent = "保存済み";
-  saveBtn.classList.remove("primary");
-  saveBtn.classList.add("saved");
-}
+  if(saveBtn){
+    saveBtn.disabled = true;
+    saveBtn.textContent = "保存済み";
+    saveBtn.classList.remove("primary");
+    saveBtn.classList.add("saved");
+  }
 
 showMsg(
     "saveMsg",
@@ -1192,6 +1253,25 @@ function isAllBundleInvoicesCompletedOnThisDevice(){
   return bundleInvoices.every(inv => completedInvoices.has(inv));
 }
 
+function removeInvoiceFromLocalStorage(inv){
+  const normalizedInv = normalizeInvoiceNo(inv);
+
+  saveLocalResults(
+    getLocalResults().filter(
+      row => normalizeInvoiceNo(row.invoice_no) !== normalizedInv
+    )
+  );
+
+  localStorage.setItem(
+    LOCAL_PROGRESS_KEY,
+    JSON.stringify(
+      getLocalProgress().filter(
+        row => normalizeInvoiceNo(row.invoice_no) !== normalizedInv
+      )
+    )
+  );
+}
+
 function clearLocalResultsAdmin(){
   if(!confirm("端末内の検品結果を削除します。\n\nPCへの取込が完了している場合だけ実行してください。\n\n削除してよろしいですか？")){
     return;
@@ -1199,6 +1279,8 @@ function clearLocalResultsAdmin(){
 
   localStorage.removeItem(LOCAL_RESULTS_KEY);
   localStorage.removeItem(LOCAL_EXPORTED_AT_KEY);
+  localStorage.removeItem(LOCAL_PROGRESS_KEY);
+  state.results = [];
   updateLocalResultCount();
 
   showMsg("saveMsg", "端末内データをクリアしました。", true);
@@ -1249,7 +1331,11 @@ $("loadCsvBtn").onclick=async()=>{try{const b=await readBundleCsv($("bundleFile"
     state.aliasMap.set(r.sku,arr)});
     state.noBarcodeSet.clear();
     b.noBarcodeRows.forEach(r=>{if(r.sku)state.noBarcodeSet.add(r.sku)});
+
+    restoreResultsFromLocal();
     updateStaffLabels();
+    updateLocalResultCount();
+
 show("scanInvoiceView");
 resetInvoiceScreen();
 }catch(e){showMsg("loadMsg","CSV読込に失敗しました： "+e.message)}};
@@ -1385,7 +1471,14 @@ $("invoiceSearchBtn").onclick=()=>{
        <p>OK：${ok}<br>保留：${hold}<br>未検品：${pending}</p>`,
       [
         {label:"続きから再開",kind:"primary",onClick:()=>{closeModal();const i=firstPendingIndex();state.currentIndex=i>=0?i:0;renderOrder()}},
-        {label:"最初からやり直す",kind:"danger",onClick:()=>{state.results=state.results.filter(r=>r.invoice_no!==inv);state.startedAt=nowText();closeModal();renderOrder()}},
+        {label:"最初からやり直す",kind:"danger",onClick:()=>{
+          state.results=state.results.filter(r=>r.invoice_no!==inv);
+          removeInvoiceFromLocalStorage(inv);
+          saveProgressToLocal();
+          state.startedAt=nowText();
+          closeModal();
+          renderOrder();
+        }},
         {label:"キャンセル",onClick:()=>{
   closeModal();
   show("scanInvoiceView");
@@ -1426,6 +1519,8 @@ function showAdminReinspection(inv){
   [
     {label:"再検品開始",kind:"danger",onClick:()=>{
       state.results=state.results.filter(r=>r.invoice_no!==inv);
+      removeInvoiceFromLocalStorage(inv);
+      saveProgressToLocal();
       state.startedAt=nowText();
       state.currentIndex=0;
       state.lastReadBarcode="";
@@ -1582,6 +1677,7 @@ $("nextInvoiceBtn").onclick = () => {
 
           localStorage.removeItem(LOCAL_RESULTS_KEY);
           localStorage.removeItem(LOCAL_EXPORTED_AT_KEY);
+          localStorage.removeItem(LOCAL_PROGRESS_KEY);
 
           closeModal();
 
@@ -1613,33 +1709,77 @@ document.addEventListener("visibilitychange", ()=>{
     }
   }
 });
-$("reloadBtn").onclick=()=>showModal(
-  "CSV再読込",
-  "<p>未保存の検品データがある場合は、先に保存してください。</p>",
-  [
-    {
-      label:"保存してから再読込",
+$("reloadBtn").onclick = () => {
+  const hasUnexported = hasUnsavedLocalResults();
+  const progressCount = getLocalProgress().length;
+
+  let message = "";
+
+  if(hasUnexported){
+    message +=
+      "<p><strong>CSVへ出力していない完了済みの検品結果があります。</strong></p>" +
+      "<p>追加送り状の発行やPC取込を行う場合は、先に検品結果CSVを保存してください。</p>";
+  }
+
+  if(progressCount > 0){
+    message +=
+      "<p>検品途中の状態は端末内に保存されています。新しいCSVを読み込んだ後も、同じ送り状・行番号・SKUの結果は復元されます。</p>";
+  }
+
+  if(!message){
+    message = "<p>新しいinspection_bundle.csvを読み込みます。</p>";
+  }
+
+  const actions = [];
+
+  if(hasUnexported){
+    actions.push({
+      label:"検品結果CSVを保存",
       kind:"primary",
       onClick:()=>{
         closeModal();
-        renderComplete();
+        downloadBatchCsv();
       }
-    },
-    {
-  label:"再読込する",
-  onClick:()=>{
-    closeModal();
-    show("loadView");
-    if($("invoiceInput")) $("invoiceInput").value = "";
-if($("invoiceMsg")) $("invoiceMsg").textContent = "";
+    });
   }
-},
-    {
-      label:"キャンセル",
-      onClick:closeModal
+
+  actions.push({
+    label:"CSV再読込へ進む",
+    onClick:()=>{
+      closeModal();
+      show("loadView");
+
+      if($("bundleFile")){
+        $("bundleFile").value = "";
+      }
+
+      renderLoadedCsvList();
+
+      if($("loadMsg")){
+        $("loadMsg").textContent = "";
+      }
+
+      if($("invoiceInput")){
+        $("invoiceInput").value = "";
+      }
+
+      if($("invoiceMsg")){
+        $("invoiceMsg").textContent = "";
+      }
     }
-  ]
-);
+  });
+
+  actions.push({
+    label:"キャンセル",
+    onClick:closeModal
+  });
+
+  showModal(
+    "CSV再読込",
+    message,
+    actions
+  );
+};
 
 function normalizeInvoiceNo(v){
   let s = String(v || "")
