@@ -20,26 +20,15 @@ function updateStaffLabels(){
   if($("itemStaffLabel")) $("itemStaffLabel").textContent=text;
 }
 function showChangeStaffModal(){
-  showModal(
-    "作業者変更",
+  showModal("作業者変更",
     `<p>以後の検品結果は、新しい作業者の社員番号で記録されます。</p>
      <p>すでに検品済みの商品は変更されません。</p>
      <label class="label">社員番号</label>
-     <input id="changeStaffCodeInput" class="input big" inputmode="numeric" pattern="[0-9]*" autocomplete="off" readonly>
-     <div class="keypad">
-       <button data-change-staff-key="1">1</button><button data-change-staff-key="2">2</button><button data-change-staff-key="3">3</button>
-       <button data-change-staff-key="4">4</button><button data-change-staff-key="5">5</button><button data-change-staff-key="6">6</button>
-       <button data-change-staff-key="7">7</button><button data-change-staff-key="8">8</button><button data-change-staff-key="9">9</button>
-       <button data-change-staff-key="clear">C</button><button data-change-staff-key="0">0</button><button data-change-staff-key="back">←</button>
-     </div>
+     <input id="changeStaffCodeInput" class="input big" inputmode="numeric" pattern="[0-9]*" autocomplete="off">
      <p id="changeStaffMsg" class="msg"></p>`,
     [
       {label:"変更",kind:"primary",onClick:()=>{
         const code=$("changeStaffCodeInput").value.trim();
-        if(!code){
-          $("changeStaffMsg").textContent="社員番号を入力してください";
-          return;
-        }
         const staff=state.staffList.find(s=>s.staff_code===code && s.active_flag==="1");
         if(!staff){
           $("changeStaffMsg").textContent="社員番号が登録されていない、または使用できません";
@@ -48,25 +37,11 @@ function showChangeStaffModal(){
         state.staff=staff;
         updateStaffLabels();
         closeModal();
-        if(document.querySelector(".view.active")?.id==="itemView") focusBarcodeInput();
       }},
-      {label:"キャンセル",onClick:()=>{
-        closeModal();
-        if(document.querySelector(".view.active")?.id==="itemView") focusBarcodeInput();
-      }}
+      {label:"キャンセル",onClick:()=>{closeModal(); focusBarcodeInput();}}
     ]
   );
-
-  document.querySelectorAll("[data-change-staff-key]").forEach(btn=>{
-    btn.onclick=()=>{
-      const input=$("changeStaffCodeInput");
-      const k=btn.dataset.changeStaffKey;
-      if(k==="clear") input.value="";
-      else if(k==="back") input.value=input.value.slice(0,-1);
-      else input.value+=k;
-      $("changeStaffMsg").textContent="";
-    };
-  });
+  setTimeout(()=>$("changeStaffCodeInput")?.focus(),100);
 }
 
 function resetInvoiceScreen(){
@@ -134,7 +109,7 @@ if(!staffRows.length)throw new Error("STAFF行がありません");
 if(!itemRows.length && !processedRows.length)throw new Error("ITEM行またはPROCESSED行がありません");
 if(!barcodeRows.length && !noBarcodeRows.length)throw new Error("BARCODE行またはNO_BARCODE行がありません");
 return{staffRows,itemRows,barcodeRows,aliasRows,noBarcodeRows,processedRows}}
-function normalizeBarcode(v){return String(v||"").normalize("NFKC").replace(/[\s-]/g,"")}
+function normalizeBarcode(v){return String(v||"").replace(/[\s-]/g,"")}
 function normalizeSkuCode(v){
   return normalizeBarcode(v)
     .replace(/\*/g, "")
@@ -522,30 +497,6 @@ function handleBarcode(raw){
     setTimeout(goNextItem, 600);
   }
 }
-function numericKeypadHtml(dataAttribute){
-  return `<div class="keypad">
-    <button ${dataAttribute}="1">1</button><button ${dataAttribute}="2">2</button><button ${dataAttribute}="3">3</button>
-    <button ${dataAttribute}="4">4</button><button ${dataAttribute}="5">5</button><button ${dataAttribute}="6">6</button>
-    <button ${dataAttribute}="7">7</button><button ${dataAttribute}="8">8</button><button ${dataAttribute}="9">9</button>
-    <button ${dataAttribute}="clear">C</button><button ${dataAttribute}="0">0</button><button ${dataAttribute}="back">←</button>
-  </div>`;
-}
-
-function bindNumericKeypad(selector,inputId,messageId=""){
-  document.querySelectorAll(selector).forEach(btn=>{
-    btn.onclick=()=>{
-      const input=$(inputId);
-      if(!input) return;
-      const keyName=Object.keys(btn.dataset)[0];
-      const k=btn.dataset[keyName];
-      if(k==="clear") input.value="";
-      else if(k==="back") input.value=input.value.slice(0,-1);
-      else input.value+=k;
-      if(messageId && $(messageId)) $(messageId).textContent="";
-    };
-  });
-}
-
 function showModal(t,b,acts){$("modalTitle").textContent=t;$("modalBody").innerHTML=b;$("modalActions").innerHTML="";acts
 .forEach(a=>{const btn=document.createElement("button");btn.className="btn "+(a.kind||"");btn
 .textContent=a.label;btn.onclick=a.onClick;$("modalActions").appendChild(btn)});$("modal").classList.remove("hidden")}
@@ -597,7 +548,7 @@ function showAdminRegister(r,read,master){
   showModal(
     "管理者社員番号",
     `<p>登録済みバーコードと違うため、管理者確認が必要です。</p>
-     <input id="adminCodeInput" class="input big" inputmode="numeric" pattern="[0-9]*" autocomplete="off" readonly>\n     ${numericKeypadHtml("data-admin-key")}
+     <input id="adminCodeInput" class="input big" inputmode="numeric" pattern="[0-9]*" autocomplete="off">
      <p id="adminMsg" class="msg"></p>`,
     [
       {
@@ -681,7 +632,7 @@ function showAdminRegister(r,read,master){
     ]
   );
 
-  bindNumericKeypad("[data-admin-key]","adminCodeInput","adminMsg");
+  setTimeout(()=>$("adminCodeInput")?.focus(),100);
 }
 
 function showNoBarcodeRegister(r, read){
@@ -887,28 +838,10 @@ function showQuantityModal(r, mode="auto"){
   });
 }
 
-function showHoldModal(r){
-  const reasons=["数量不足","商品バーコード不明","商品なし","送り状修正"];
-
-  showModal(
-    "保留理由",
-    `<div>${reasons.map(x=>`<button type="button" class="btn holdReason" data-r="${x}">${x}</button>`).join("")}</div>`,
-    [
-      {label:"キャンセル",onClick:()=>{
-        closeModal();
-        if(document.querySelector(".view.active")?.id==="itemView") focusBarcodeInput();
-      }}
-    ]
-  );
-
-  document.querySelectorAll(".holdReason").forEach(btn=>{
-    btn.onclick=()=>{
-      markHold(r,btn.dataset.r,"");
-      closeModal();
-      renderOrder();
-    };
-  });
-}
+function showHoldModal(r){const reasons=["数量不足","商品バーコード不明","商品なし","送り状修正","その他"];
+showModal("保留理由",`<div>${reasons.map(x=>`<button class="btn holdReason" data-r="${x}">${x}</button>`).join("")}<textarea id="holdMemo" class="input" placeholder="メモ"></textarea></div>`,[{label:"キャンセル",onClick:()=>{closeModal();
+}}]);
+document.querySelectorAll(".holdReason").forEach(btn=>btn.onclick=()=>{markHold(r,btn.dataset.r,$("holdMemo").value||"");closeModal();renderOrder()})}
 
 function renderComplete(){
   const items = state.currentItems;
@@ -1581,7 +1514,7 @@ $("invoiceInput").addEventListener("keydown", e => {
 
 function showAdminReinspection(inv){
   showModal("管理者社員番号",
-    `<input id="reinspectAdminCodeInput" class="input big" inputmode="numeric" pattern="[0-9]*" autocomplete="off" readonly>\n     ${numericKeypadHtml("data-reinspect-admin-key")}
+    `<input id="reinspectAdminCodeInput" class="input big" inputmode="numeric" pattern="[0-9]*" autocomplete="off">
      <p id="reinspectAdminMsg" class="msg"></p>`,
     [
       {label:"確認",kind:"primary",onClick:()=>{
@@ -1621,7 +1554,7 @@ function showAdminReinspection(inv){
 }}
     ]
   );
-  bindNumericKeypad("[data-reinspect-admin-key]","reinspectAdminCodeInput","reinspectAdminMsg");
+  setTimeout(()=>$("reinspectAdminCodeInput")?.focus(),100);
 }
 
 
