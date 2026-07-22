@@ -626,11 +626,38 @@ function showBarcodeMismatch(r,read,master){
   );
 }
 
-function showAdminRegister(r,read,master){
+function showAdminRegister(r, read, master){
   showModal(
     "管理者社員番号",
     `<p>登録済みバーコードと違うため、管理者確認が必要です。</p>
-     <input id="adminCodeInput" class="input big" inputmode="numeric" pattern="[0-9]*" autocomplete="off">
+
+     <input
+       id="adminCodeInput"
+       class="input big"
+       inputmode="numeric"
+       pattern="[0-9]*"
+       autocomplete="off"
+       readonly
+     >
+
+     <div class="keypad">
+       <button type="button" data-admin-key="1">1</button>
+       <button type="button" data-admin-key="2">2</button>
+       <button type="button" data-admin-key="3">3</button>
+
+       <button type="button" data-admin-key="4">4</button>
+       <button type="button" data-admin-key="5">5</button>
+       <button type="button" data-admin-key="6">6</button>
+
+       <button type="button" data-admin-key="7">7</button>
+       <button type="button" data-admin-key="8">8</button>
+       <button type="button" data-admin-key="9">9</button>
+
+       <button type="button" data-admin-key="clear">C</button>
+       <button type="button" data-admin-key="0">0</button>
+       <button type="button" data-admin-key="back">←</button>
+     </div>
+
      <p id="adminMsg" class="msg"></p>`,
     [
       {
@@ -638,10 +665,23 @@ function showAdminRegister(r,read,master){
         kind:"primary",
         onClick:()=>{
           const code = $("adminCodeInput").value.trim();
-          const admin = state.staffList.find(s=>s.staff_code===code && s.active_flag==="1" && s.is_admin==="1");
+
+          if(!code){
+            $("adminMsg").textContent =
+              "管理者社員番号を入力してください";
+            return;
+          }
+
+          const admin = state.staffList.find(
+            s =>
+              s.staff_code === code &&
+              s.active_flag === "1" &&
+              s.is_admin === "1"
+          );
 
           if(!admin){
-            $("adminMsg").textContent = "管理者社員番号が確認できません";
+            $("adminMsg").textContent =
+              "管理者社員番号が確認できません";
             return;
           }
 
@@ -653,8 +693,10 @@ function showAdminRegister(r,read,master){
              <p><strong>今回読取</strong><br>${read}</p>
              <p class="msg">
                現物を確認して、処理を選んでください。<br>
-               商品は正しいが今回読取バーコードを登録しない場合は「商品OK・バーコードは登録しない」を選んでください。<br>
-               今回読取バーコードを今後の正しいバーコードにする場合だけ「バーコードを変更する」を選んでください。
+               商品は正しいが今回読取バーコードを登録しない場合は
+               「商品OK・バーコードは登録しない」を選んでください。<br>
+               今回読取バーコードを今後の正しいバーコードにする場合だけ
+               「バーコードを変更する」を選んでください。
              </p>`,
             [
               {
@@ -664,11 +706,24 @@ function showAdminRegister(r,read,master){
                   closeModal();
 
                   if(Number(r.quantity || 1) >= 2){
-                    showAdminBarcodeDecisionQuantityModal(r, read, master, admin.staff_code, "product_ok_no_register");
+                    showAdminBarcodeDecisionQuantityModal(
+                      r,
+                      read,
+                      master,
+                      admin.staff_code,
+                      "product_ok_no_register"
+                    );
                     return;
                   }
 
-                  completeAdminBarcodeDecision(r, read, master, admin.staff_code, "product_ok_no_register", "1");
+                  completeAdminBarcodeDecision(
+                    r,
+                    read,
+                    master,
+                    admin.staff_code,
+                    "product_ok_no_register",
+                    "1"
+                  );
                 }
               },
               {
@@ -678,11 +733,24 @@ function showAdminRegister(r,read,master){
                   closeModal();
 
                   if(Number(r.quantity || 1) >= 2){
-                    showAdminBarcodeDecisionQuantityModal(r, read, master, admin.staff_code, "replace_barcode");
+                    showAdminBarcodeDecisionQuantityModal(
+                      r,
+                      read,
+                      master,
+                      admin.staff_code,
+                      "replace_barcode"
+                    );
                     return;
                   }
 
-                  completeAdminBarcodeDecision(r, read, master, admin.staff_code, "replace_barcode", "1");
+                  completeAdminBarcodeDecision(
+                    r,
+                    read,
+                    master,
+                    admin.staff_code,
+                    "replace_barcode",
+                    "1"
+                  );
                 }
               },
               {
@@ -714,7 +782,24 @@ function showAdminRegister(r,read,master){
     ]
   );
 
-  setTimeout(()=>$("adminCodeInput")?.focus(),100);
+  document
+    .querySelectorAll("[data-admin-key]")
+    .forEach(btn=>{
+      btn.onclick = ()=>{
+        const input = $("adminCodeInput");
+        const key = btn.dataset.adminKey;
+
+        if(key === "clear"){
+          input.value = "";
+        }else if(key === "back"){
+          input.value = input.value.slice(0, -1);
+        }else{
+          input.value += key;
+        }
+
+        $("adminMsg").textContent = "";
+      };
+    });
 }
 
 function showNoBarcodeRegister(r, read){
