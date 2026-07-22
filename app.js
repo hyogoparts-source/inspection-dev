@@ -1005,10 +1005,48 @@ function showQuantityModal(r, mode="auto"){
   });
 }
 
-function showHoldModal(r){const reasons=["数量不足","商品バーコード不明","商品なし","送り状修正","その他"];
-showModal("保留理由",`<div>${reasons.map(x=>`<button class="btn holdReason" data-r="${x}">${x}</button>`).join("")}<textarea id="holdMemo" class="input" placeholder="メモ"></textarea></div>`,[{label:"キャンセル",onClick:()=>{closeModal();
-}}]);
-document.querySelectorAll(".holdReason").forEach(btn=>btn.onclick=()=>{markHold(r,btn.dataset.r,$("holdMemo").value||"");closeModal();renderOrder()})}
+function showHoldModal(r){
+  const reasons = [
+    "数量不足",
+    "商品バーコード不明",
+    "商品なし",
+    "送り状修正",
+    "その他"
+  ];
+
+  showModal(
+    "保留理由",
+    `<p>保留にする理由を選んでください。</p>
+     <div class="holdReasonList">
+       ${reasons.map(reason =>
+         `<button
+            type="button"
+            class="btn holdReason"
+            data-r="${reason}"
+          >${reason}</button>`
+       ).join("")}
+     </div>`,
+    [
+      {
+        label:"キャンセル",
+        onClick:()=>{
+          closeModal();
+          focusBarcodeInput();
+        }
+      }
+    ]
+  );
+
+  document
+    .querySelectorAll(".holdReason")
+    .forEach(btn=>{
+      btn.onclick = ()=>{
+        markHold(r, btn.dataset.r, "");
+        closeModal();
+        renderOrder();
+      };
+    });
+}
 
 function renderComplete(){
   const items = state.currentItems;
