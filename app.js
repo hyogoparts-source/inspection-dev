@@ -575,8 +575,8 @@ function handleBarcode(raw){
     showQuantityModal(r);
   }else{
     markOk(r, "barcode", read, "1");
-    showMsg("itemMsg", "✓ 一致", true);
-    setTimeout(goNextItem, 600);
+    showMsg("itemMsg", `✓ 一致　読取値：${read}`, true);
+setTimeout(goNextItem, 1000);
   }
 }
 function showModal(t,b,acts){$("modalTitle").textContent=t;$("modalBody").innerHTML=b;$("modalActions").innerHTML="";acts
