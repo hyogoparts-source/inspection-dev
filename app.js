@@ -1680,34 +1680,34 @@ $("invoiceInput").addEventListener("keydown", e => {
 });
 
 function showAdminReinspection(inv){
+  if(document.activeElement){
+    document.activeElement.blur();
+  }
+
   showModal(
     "管理者社員番号",
     `<input
-       id="reinspectAdminCodeInput"
-       class="input big"
-       inputmode="numeric"
-       pattern="[0-9]*"
-       autocomplete="off"
-       readonly
-     >
+  id="reinspectAdminCodeInput"
+  class="input big"
+  inputmode="none"
+  autocomplete="off"
+  readonly
+>
 
      <div class="keypad">
-       <button type="button" data-reinspect-admin-key="1">1</button>
-       <button type="button" data-reinspect-admin-key="2">2</button>
-       <button type="button" data-reinspect-admin-key="3">3</button>
-
-       <button type="button" data-reinspect-admin-key="4">4</button>
-       <button type="button" data-reinspect-admin-key="5">5</button>
-       <button type="button" data-reinspect-admin-key="6">6</button>
-
-       <button type="button" data-reinspect-admin-key="7">7</button>
-       <button type="button" data-reinspect-admin-key="8">8</button>
-       <button type="button" data-reinspect-admin-key="9">9</button>
-
-       <button type="button" data-reinspect-admin-key="clear">C</button>
-       <button type="button" data-reinspect-admin-key="0">0</button>
-       <button type="button" data-reinspect-admin-key="back">←</button>
-     </div>
+  <button type="button" data-reinspect-admin-key="1">1</button>
+  <button type="button" data-reinspect-admin-key="2">2</button>
+  <button type="button" data-reinspect-admin-key="3">3</button>
+  <button type="button" data-reinspect-admin-key="4">4</button>
+  <button type="button" data-reinspect-admin-key="5">5</button>
+  <button type="button" data-reinspect-admin-key="6">6</button>
+  <button type="button" data-reinspect-admin-key="7">7</button>
+  <button type="button" data-reinspect-admin-key="8">8</button>
+  <button type="button" data-reinspect-admin-key="9">9</button>
+  <button type="button" data-reinspect-admin-key="clear">C</button>
+  <button type="button" data-reinspect-admin-key="0">0</button>
+  <button type="button" data-reinspect-admin-key="back">←</button>
+</div>
 
      <p id="reinspectAdminMsg" class="msg"></p>`,
     [
