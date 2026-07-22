@@ -1680,48 +1680,127 @@ $("invoiceInput").addEventListener("keydown", e => {
 });
 
 function showAdminReinspection(inv){
-  showModal("管理者社員番号",
-    `<input id="reinspectAdminCodeInput" class="input big" inputmode="numeric" pattern="[0-9]*" autocomplete="off">
+  showModal(
+    "管理者社員番号",
+    `<input
+       id="reinspectAdminCodeInput"
+       class="input big"
+       inputmode="numeric"
+       pattern="[0-9]*"
+       autocomplete="off"
+       readonly
+     >
+
+     <div class="keypad">
+       <button type="button" data-reinspect-admin-key="1">1</button>
+       <button type="button" data-reinspect-admin-key="2">2</button>
+       <button type="button" data-reinspect-admin-key="3">3</button>
+
+       <button type="button" data-reinspect-admin-key="4">4</button>
+       <button type="button" data-reinspect-admin-key="5">5</button>
+       <button type="button" data-reinspect-admin-key="6">6</button>
+
+       <button type="button" data-reinspect-admin-key="7">7</button>
+       <button type="button" data-reinspect-admin-key="8">8</button>
+       <button type="button" data-reinspect-admin-key="9">9</button>
+
+       <button type="button" data-reinspect-admin-key="clear">C</button>
+       <button type="button" data-reinspect-admin-key="0">0</button>
+       <button type="button" data-reinspect-admin-key="back">←</button>
+     </div>
+
      <p id="reinspectAdminMsg" class="msg"></p>`,
     [
-      {label:"確認",kind:"primary",onClick:()=>{
-        const code=$("reinspectAdminCodeInput").value.trim();
-        const admin=state.staffList.find(s=>s.staff_code===code&&s.active_flag==="1"&&s.is_admin==="1");
-        if(!admin){
-          $("reinspectAdminMsg").textContent="管理者社員番号が確認できません";
-          return;
+      {
+        label:"確認",
+        kind:"primary",
+        onClick:()=>{
+          const code = $("reinspectAdminCodeInput").value.trim();
+
+          if(!code){
+            $("reinspectAdminMsg").textContent =
+              "管理者社員番号を入力してください";
+            return;
+          }
+
+          const admin = state.staffList.find(
+            s =>
+              s.staff_code === code &&
+              s.active_flag === "1" &&
+              s.is_admin === "1"
+          );
+
+          if(!admin){
+            $("reinspectAdminMsg").textContent =
+              "管理者社員番号が確認できません";
+            return;
+          }
+
+          showModal(
+            "再検品開始",
+            `<p>再検品を開始しますか？</p>
+             <p>※既存の検品結果は削除されます。</p>
+             <p>管理者：${admin.staff_name || admin.staff_code}</p>`,
+            [
+              {
+                label:"再検品開始",
+                kind:"danger",
+                onClick:()=>{
+                  state.results =
+                    state.results.filter(r => r.invoice_no !== inv);
+
+                  removeInvoiceFromLocalStorage(inv);
+                  saveProgressToLocal();
+
+                  state.startedAt = nowText();
+                  state.currentIndex = 0;
+                  state.lastReadBarcode = "";
+
+                  closeModal();
+                  renderOrder();
+                }
+              },
+              {
+                label:"キャンセル",
+                onClick:()=>{
+                  closeModal();
+                  show("scanInvoiceView");
+                  resetInvoiceScreen();
+                }
+              }
+            ]
+          );
         }
-        showModal("再検品開始",
-  `<p>再検品を開始しますか？</p>
-   <p>※既存の検品結果は削除されます。</p>
-   <p>管理者：${admin.staff_name||admin.staff_code}</p>`,
-  [
-    {label:"再検品開始",kind:"danger",onClick:()=>{
-      state.results=state.results.filter(r=>r.invoice_no!==inv);
-      removeInvoiceFromLocalStorage(inv);
-      saveProgressToLocal();
-      state.startedAt=nowText();
-      state.currentIndex=0;
-      state.lastReadBarcode="";
-      closeModal();
-      renderOrder();
-    }},
-    {label:"キャンセル",onClick:()=>{
-      closeModal();
-      show("scanInvoiceView");
-      resetInvoiceScreen();
-    }}
-  ]
-);
-      }},
-      {label:"キャンセル",onClick:()=>{
-  closeModal();
-  show("scanInvoiceView");
-  resetInvoiceScreen();
-}}
+      },
+      {
+        label:"キャンセル",
+        onClick:()=>{
+          closeModal();
+          show("scanInvoiceView");
+          resetInvoiceScreen();
+        }
+      }
     ]
   );
-  setTimeout(()=>$("reinspectAdminCodeInput")?.focus(),100);
+
+  document
+    .querySelectorAll("[data-reinspect-admin-key]")
+    .forEach(btn=>{
+      btn.onclick = ()=>{
+        const input = $("reinspectAdminCodeInput");
+        const key = btn.dataset.reinspectAdminKey;
+
+        if(key === "clear"){
+          input.value = "";
+        }else if(key === "back"){
+          input.value = input.value.slice(0, -1);
+        }else{
+          input.value += key;
+        }
+
+        $("reinspectAdminMsg").textContent = "";
+      };
+    });
 }
 
 
