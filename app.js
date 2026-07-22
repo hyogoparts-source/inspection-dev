@@ -20,28 +20,110 @@ function updateStaffLabels(){
   if($("itemStaffLabel")) $("itemStaffLabel").textContent=text;
 }
 function showChangeStaffModal(){
-  showModal("作業者変更",
+  showModal(
+    "作業者変更",
     `<p>以後の検品結果は、新しい作業者の社員番号で記録されます。</p>
      <p>すでに検品済みの商品は変更されません。</p>
+
      <label class="label">社員番号</label>
-     <input id="changeStaffCodeInput" class="input big" inputmode="numeric" pattern="[0-9]*" autocomplete="off">
+
+     <input
+       id="changeStaffCodeInput"
+       class="input big"
+       inputmode="numeric"
+       pattern="[0-9]*"
+       autocomplete="off"
+       readonly
+     >
+
+     <div class="keypad">
+       <button type="button" data-change-staff-key="1">1</button>
+       <button type="button" data-change-staff-key="2">2</button>
+       <button type="button" data-change-staff-key="3">3</button>
+
+       <button type="button" data-change-staff-key="4">4</button>
+       <button type="button" data-change-staff-key="5">5</button>
+       <button type="button" data-change-staff-key="6">6</button>
+
+       <button type="button" data-change-staff-key="7">7</button>
+       <button type="button" data-change-staff-key="8">8</button>
+       <button type="button" data-change-staff-key="9">9</button>
+
+       <button type="button" data-change-staff-key="clear">C</button>
+       <button type="button" data-change-staff-key="0">0</button>
+       <button type="button" data-change-staff-key="back">←</button>
+     </div>
+
      <p id="changeStaffMsg" class="msg"></p>`,
     [
-      {label:"変更",kind:"primary",onClick:()=>{
-        const code=$("changeStaffCodeInput").value.trim();
-        const staff=state.staffList.find(s=>s.staff_code===code && s.active_flag==="1");
-        if(!staff){
-          $("changeStaffMsg").textContent="社員番号が登録されていない、または使用できません";
-          return;
+      {
+        label:"変更",
+        kind:"primary",
+        onClick:()=>{
+          const code = $("changeStaffCodeInput").value.trim();
+
+          if(!code){
+            $("changeStaffMsg").textContent =
+              "社員番号を入力してください";
+            return;
+          }
+
+          const staff = state.staffList.find(
+            s =>
+              s.staff_code === code &&
+              s.active_flag === "1"
+          );
+
+          if(!staff){
+            $("changeStaffMsg").textContent =
+              "社員番号が登録されていない、または使用できません";
+            return;
+          }
+
+          state.staff = staff;
+          updateStaffLabels();
+          closeModal();
+
+          if(
+            document.querySelector(".view.active")?.id === "itemView"
+          ){
+            focusBarcodeInput();
+          }
         }
-        state.staff=staff;
-        updateStaffLabels();
-        closeModal();
-      }},
-      {label:"キャンセル",onClick:()=>{closeModal(); focusBarcodeInput();}}
+      },
+      {
+        label:"キャンセル",
+        onClick:()=>{
+          closeModal();
+
+          if(
+            document.querySelector(".view.active")?.id === "itemView"
+          ){
+            focusBarcodeInput();
+          }
+        }
+      }
     ]
   );
-  setTimeout(()=>$("changeStaffCodeInput")?.focus(),100);
+
+  document
+    .querySelectorAll("[data-change-staff-key]")
+    .forEach(btn=>{
+      btn.onclick = ()=>{
+        const input = $("changeStaffCodeInput");
+        const key = btn.dataset.changeStaffKey;
+
+        if(key === "clear"){
+          input.value = "";
+        }else if(key === "back"){
+          input.value = input.value.slice(0, -1);
+        }else{
+          input.value += key;
+        }
+
+        $("changeStaffMsg").textContent = "";
+      };
+    });
 }
 
 function resetInvoiceScreen(){
