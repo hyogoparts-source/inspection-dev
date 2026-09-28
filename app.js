@@ -1102,23 +1102,12 @@ function renderComplete(){
     `未検品：${pending}`;
 
   const saveBtn = $("saveResultBtn");
-  const hasUnexported = hasUnsavedLocalResults();
 
   if(saveBtn){
     saveBtn.classList.remove("hidden");
-
-    if(hasUnexported){
-      saveBtn.disabled = false;
-      saveBtn.textContent = "検品結果CSVをまとめて保存";
-      saveBtn.classList.add("primary");
-      saveBtn.classList.remove("saved");
-    }else{
-      saveBtn.disabled = true;
-      saveBtn.textContent = "保存済み";
-      saveBtn.classList.remove("primary");
-      saveBtn.classList.add("saved");
-    }
   }
+
+  updateSaveResultButton();
 
   updateNextInvoiceButton();
 
@@ -1132,6 +1121,9 @@ function renderComplete(){
 const LOCAL_RESULTS_KEY = "hyogo_parts_inspection_results_v1";
 const LOCAL_EXPORTED_AT_KEY = "hyogo_parts_inspection_exported_at_v1";
 const LOCAL_PROGRESS_KEY = "hyogo_parts_inspection_progress_v1";
+// 直前に生成した検品結果CSVの完全なスナップショット（保存確認・再保存用）
+const LAST_EXPORT_KEY = "hyogo_parts_inspection_last_export_v1";
+
 
 const RESULT_HEADERS = [
   "result_id",
@@ -1216,6 +1208,188 @@ function getExportedAt(){
 function setExportedAt(value){
   localStorage.setItem(LOCAL_EXPORTED_AT_KEY, value || "");
 }
+
+// ---- CSV保存確認方式 ----
+// ブラウザからはOS側のファイル保存成功を確認できないため、
+// 作業者が「ファイルを確認できた」を押すまで exportedAt を進めない。
+
+function getLastExport(){
+  try{
+    const v = JSON.parse(localStorage.getItem(LAST_EXPORT_KEY) || "null");
+    return v && v.file_name && typeof v.csv_text === "string" ? v : null;
+  }catch(e){
+    return null;
+  }
+}
+
+function setLastExport(snapshot){
+  localStorage.setItem(LAST_EXPORT_KEY, JSON.stringify(snapshot));
+}
+
+function isLastExportPending(){
+  const last = getLastExport();
+  return !!(last && !last.confirmed);
+}
+
+function triggerCsvDownload(fileName, csvText){
+  const blob = new Blob(
+    [csvText],
+    {type: "text/csv;charset=utf-8"}
+  );
+
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+
+  a.href = url;
+  a.download = fileName;
+
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+
+  setTimeout(() => {
+    URL.revokeObjectURL(url);
+  }, 1000);
+}
+
+// 直前のCSVを同じファイル名・同じ内容で再ダウンロードする。
+// completed_at・export_at・検品結果は変更しない。
+function redownloadLastExport(){
+  const last = getLastExport();
+
+  if(!last){
+    showMsg("saveMsg", "再保存できるCSVがありません。", false);
+    return null;
+  }
+
+  triggerCsvDownload(last.file_name, last.csv_text);
+  return last;
+}
+
+// 作業者がファイルの存在を確認した時だけ、出力済みとして確定する
+function confirmLastExport(){
+  const last = getLastExport();
+
+  if(!last){
+    return;
+  }
+
+  const current = getExportedAt();
+
+  if(!current || String(last.export_at) > current){
+    setExportedAt(last.export_at);
+  }
+
+  last.confirmed = true;
+  last.confirmed_at = nowText();
+  setLastExport(last);
+
+  updateLocalResultCount();
+  updateNextInvoiceButton();
+  updateSaveResultButton();
+
+  showMsg(
+    "saveMsg",
+    `CSVファイル（${last.file_name}）の保存を確認しました。`,
+    true
+  );
+}
+
+function showSaveConfirmModal(snapshot){
+  const last = snapshot || getLastExport();
+
+  if(!last){
+    return;
+  }
+
+  showModal(
+    "CSV保存の確認",
+    `<p>CSV保存処理を開始しました。</p>
+     <p>ファイルアプリ / iCloud Drive に<br><strong>${escapeHtmlText(last.file_name)}</strong><br>があることを確認してください。</p>
+     <p>ファイルが見つからない場合は「CSVを再保存」を押してください。<br>端末内の検品結果は削除していません。</p>`,
+    [
+      {
+        label:"ファイルを確認できた",
+        kind:"primary",
+        onClick:()=>{
+          closeModal();
+          confirmLastExport();
+        }
+      },
+      {
+        label:"CSVを再保存",
+        onClick:()=>{
+          redownloadLastExport();
+          showSaveConfirmModal();
+        }
+      },
+      {
+        label:"あとで確認",
+        onClick:()=>{
+          closeModal();
+          updateSaveResultButton();
+          updateNextInvoiceButton();
+        }
+      }
+    ]
+  );
+}
+
+function escapeHtmlText(v){
+  return String(v == null ? "" : v)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+// 保存ボタンを恒久的に押せなくしない
+//   未出力行あり（新しい内容）→ 検品結果CSVを保存
+//   保存確認前                → CSVを再保存
+//   未出力行0＋直前CSVあり     → 直前のCSVを再保存
+//   結果なし                  → disabled
+function updateSaveResultButton(){
+  const saveBtn = $("saveResultBtn");
+
+  if(!saveBtn){
+    return;
+  }
+
+  const rows = getUnexportedResultRows();
+  const last = getLastExport();
+
+  saveBtn.disabled = false;
+  saveBtn.classList.remove("saved");
+
+  if(rows.length > 0){
+    const csvText = "\uFEFF" + buildBatchResultCsv(rows);
+
+    if(last && !last.confirmed && last.csv_text === csvText){
+      saveBtn.textContent = "CSVを再保存";
+    }else{
+      saveBtn.textContent = "検品結果CSVを保存";
+    }
+
+    saveBtn.classList.add("primary");
+    return;
+  }
+
+  if(last){
+    saveBtn.textContent = last.confirmed ? "直前のCSVを再保存" : "CSVを再保存";
+
+    if(last.confirmed){
+      saveBtn.classList.remove("primary");
+    }else{
+      saveBtn.classList.add("primary");
+    }
+    return;
+  }
+
+  saveBtn.disabled = true;
+  saveBtn.textContent = "検品結果CSVを保存";
+  saveBtn.classList.remove("primary");
+}
+
 
 function buildCurrentResultRows(){
   const completedAt = nowText();
@@ -1330,6 +1504,16 @@ function downloadBatchCsv(){
   const rows = getUnexportedResultRows();
 
   if(rows.length === 0){
+    // 直前のCSVがあれば、同じ内容で再保存できるようにする
+    const lastExport = getLastExport();
+
+    if(lastExport){
+      redownloadLastExport();
+      updateSaveResultButton();
+      showSaveConfirmModal(lastExport);
+      return;
+    }
+
     showMsg(
       "saveMsg",
       "CSVへ出力していない検品結果はありません。",
@@ -1341,6 +1525,16 @@ function downloadBatchCsv(){
 
   const csv = "\uFEFF" + buildBatchResultCsv(rows);
 
+  // 保存確認前の直前CSVと同じ内容なら、同じファイル名・同じ内容で再保存する
+  const last = getLastExport();
+
+  if(last && !last.confirmed && last.csv_text === csv){
+    redownloadLastExport();
+    updateSaveResultButton();
+    showSaveConfirmModal(last);
+    return;
+  }
+
   const d = new Date();
   const p = n => String(n).padStart(2, "0");
 
@@ -1349,45 +1543,30 @@ function downloadBatchCsv(){
     `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}_` +
     `${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}.csv`;
 
-  const blob = new Blob(
-    [csv],
-    {type: "text/csv;charset=utf-8"}
-  );
+  // 生成したCSVをそのまま保持する（保存確認前は exportedAt を進めない）
+  const snapshot = {
+    file_name: name,
+    csv_text: csv,
+    row_count: rows.length,
+    export_at: nowText(),
+    confirmed: false
+  };
 
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
+  setLastExport(snapshot);
 
-  a.href = url;
-  a.download = name;
-
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-
-  setTimeout(() => {
-    URL.revokeObjectURL(url);
-  }, 1000);
-
-  // 今回CSVに出力した時点を保存する
-  setExportedAt(nowText());
+  triggerCsvDownload(name, csv);
 
   updateLocalResultCount();
   updateNextInvoiceButton();
-
-  const saveBtn = $("saveResultBtn");
-
-  if(saveBtn){
-    saveBtn.disabled = true;
-    saveBtn.textContent = "保存済み";
-    saveBtn.classList.remove("primary");
-    saveBtn.classList.add("saved");
-  }
+  updateSaveResultButton();
 
   showMsg(
     "saveMsg",
-    `${rows.length}件の検品結果CSVをまとめて保存しました。`,
+    `${rows.length}件の検品結果CSVの保存処理を開始しました。ファイルがあることを確認してください。`,
     true
   );
+
+  showSaveConfirmModal(snapshot);
 }
 
 
@@ -1408,7 +1587,7 @@ function updateLocalResultCount(){
 }
 
 function hasUnsavedLocalResults(){
-  return getUnexportedResultRows().length > 0;
+  return getUnexportedResultRows().length > 0 || isLastExportPending();
 }
 
 function updateNextInvoiceButton(){
@@ -1497,6 +1676,7 @@ function clearLocalResultsAdmin(){
   localStorage.removeItem(LOCAL_RESULTS_KEY);
   localStorage.removeItem(LOCAL_EXPORTED_AT_KEY);
   localStorage.removeItem(LOCAL_PROGRESS_KEY);
+  localStorage.removeItem(LAST_EXPORT_KEY);
   state.results = [];
   updateLocalResultCount();
 
@@ -1952,8 +2132,18 @@ $("nextInvoiceBtn").onclick = () => {
     `<p>作業を終了しますか？</p>
      <p class="msg">
        PCへの取込が完了している場合は、端末内データをクリアできます。
+     </p>
+     <p class="msg">
+       CSVがファイルアプリ / iCloud Drive に存在することを確認してから作業を終了してください。<br>
+       見つからない場合は「CSVを再保存」してください。
      </p>`,
     [
+      ...(getLastExport() ? [{
+        label:"CSVを再保存",
+        onClick:()=>{
+          redownloadLastExport();
+        }
+      }] : []),
       {
         label:"送り状読取画面へ戻る",
         kind:"primary",
@@ -1982,6 +2172,7 @@ $("nextInvoiceBtn").onclick = () => {
           localStorage.removeItem(LOCAL_RESULTS_KEY);
           localStorage.removeItem(LOCAL_EXPORTED_AT_KEY);
           localStorage.removeItem(LOCAL_PROGRESS_KEY);
+          localStorage.removeItem(LAST_EXPORT_KEY);
 
           closeModal();
 
@@ -2015,10 +2206,16 @@ document.addEventListener("visibilitychange", ()=>{
 $("reloadBtn").onclick = () => {
   const hasUnexported = hasUnsavedLocalResults();
   const progressCount = getLocalProgress().length;
+  const pendingExport = isLastExportPending() ? getLastExport() : null;
 
   let message = "";
 
-  if(hasUnexported){
+  if(pendingExport){
+    message +=
+      "<p><strong>保存確認前の検品結果CSVがあります。</strong></p>" +
+      `<p>ファイルアプリ / iCloud Drive に<br><strong>${escapeHtmlText(pendingExport.file_name)}</strong><br>があるか確認してください。</p>` +
+      "<p>見つからない場合は「CSVを再保存」を押してください。端末内の検品結果は削除していません。</p>";
+  }else if(hasUnexported){
     message +=
       "<p><strong>CSVへ出力していない完了済みの検品結果があります。</strong></p>" +
       "<p>追加送り状の発行やPC取込を行う場合は、先に検品結果CSVを保存してください。</p>";
@@ -2035,7 +2232,24 @@ $("reloadBtn").onclick = () => {
 
   const actions = [];
 
-  if(hasUnexported){
+  if(pendingExport){
+    actions.push({
+      label:"CSVを再保存",
+      kind:"primary",
+      onClick:()=>{
+        closeModal();
+        downloadBatchCsv();
+      }
+    });
+
+    actions.push({
+      label:"ファイルを確認できた",
+      onClick:()=>{
+        closeModal();
+        confirmLastExport();
+      }
+    });
+  }else if(hasUnexported){
     actions.push({
       label:"検品結果CSVを保存",
       kind:"primary",
@@ -2049,6 +2263,19 @@ $("reloadBtn").onclick = () => {
   actions.push({
     label:"CSV再読込へ進む",
     onClick:()=>{
+      if(pendingExport){
+        const ok = confirm(
+          "検品結果CSVの保存確認がまだ済んでいません。\n\n" +
+          "ファイルアプリ / iCloud Drive にCSVが無い場合、PCへ検品結果を取り込めません。\n" +
+          "（端末内の検品結果は削除しません）\n\n" +
+          "このままCSV再読込へ進みますか？"
+        );
+
+        if(!ok){
+          return;
+        }
+      }
+
       closeModal();
       show("loadView");
 
