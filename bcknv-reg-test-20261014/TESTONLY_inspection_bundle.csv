@@ -1,0 +1,17 @@
+﻿record_type,staff_code,staff_name,active_flag,is_admin,updated_at,invoice_no,order_no,ship_name,line_no,parent_sku,sku,item_name,jan,quantity,is_set,set_parent_sku,image_url,manual_required,barcode,reason,registered_by,registered_at,source
+STAFF,99001,DeviceTestAdmin,1,1,,,,,,,,,,,,,,,,,,,
+STAFF,99002,DeviceTestStaff,1,0,,,,,,,,,,,,,,,,,,,
+ITEM,,,,,,990000014001,99014001,DEVICE_ADD_SAME_SKU,1,,CNCE01WD,パナソニック Panasonic カーナビゲーション strada CN-CE01WD 7インチスタンダードモデル 200mm ワイドモデル スマートフォン連携,4549980762967,1,0,,https://item-shopping.c.yimg.jp/i/l/hyogoparts_cnce01wd_i_20241001152424,0,,,,,S
+ITEM,,,,,,990000014002,99014002,DEVICE_COMMON_CROSS_SKU,1,,HVXT02,ビートソニック デジタルインプットインターフェース HVXT02 ハリアー R2/06～R4/10 T-Connect SDナビ＋JBLプレミアムサウンドシステム,4944799040365,1,0,,https://item-shopping.c.yimg.jp/i/l/hyogoparts_hvxt02_i_20250118140034,0,,,,,S
+ITEM,,,,,,990000014003,99014003,DEVICE_NOBARCODE_COMMON,1,,N001V4900N--,マツダ（MAZDA）フロントエアダムスカート/NAロードスター/ N001V4900N--(N001-V4-900N)マツダ純正オプション,,1,0,,https://item-shopping.c.yimg.jp/i/l/hyogoparts_n001v4900n--,1,,,,,S
+BARCODE,,,,,,,,,,,CNCE01WD,,,,,,,,4549980762967,,,,barcode_master
+BARCODE,,,,,,,,,,,HVXT02,,,,,,,,4944799040365,,,,barcode_master
+NO_BARCODE,,,,,,,,,,,N001V4900N--,,,,,,,,,barcode_master_and_product_master_empty,,,product_master
+BARCODE_OWNER,,,,,,,,,,,CNCE01WD,,,,,,,,4549980762967,,,,barcode_master
+BARCODE_OWNER,,,,,,,,,,,CNCE01WD-CYRC110KD,,,,,,,,4549980762967,,,,barcode_master
+BARCODE_OWNER,,,,,,,,,,,HVXT02,,,,,,,,4944799040365,,,,barcode_master
+BARCODE_OWNER,,,,,,,,,,,HVXT02-HDC2A,,,,,,,,4944799040365,,,,barcode_master
+BARCODE_OWNER,,,,,,,,,,,HVXT04,,,,,,,,4944799040976,,,,barcode_master
+BARCODE_OWNER,,,,,,,,,,,HVXT04-HDC2A,,,,,,,,4944799040976,,,,barcode_master
+BARCODE_OWNER,,,,,,,,,,,BCKNV0360A,,,,,,,,BCKNV0360AK,,,,barcode_master
+BARCODE_OWNER_INDEX,,,,,,,,,,,,,,,,,,,,7,,2026-10-14 15:18:12,barcode_master
