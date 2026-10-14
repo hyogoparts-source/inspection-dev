@@ -1,5 +1,5 @@
 
-const state={staff:null,staffList:[],inspectionRows:[],processedRows:[],barcodeMap:new Map(),aliasMap:new Map(),noBarcodeSet:new Set(),currentInvoice:null,currentItems:[],currentIndex:0,results:[],startedAt:null,lastReadBarcode:"",lastMismatchBarcode:"",lastMismatchMaster:""};
+const state={staff:null,staffList:[],inspectionRows:[],processedRows:[],barcodeMap:new Map(),aliasMap:new Map(),noBarcodeSet:new Set(),currentInvoice:null,currentItems:[],currentIndex:0,results:[],startedAt:null,lastReadBarcode:"",lastMismatchBarcode:"",lastMismatchMaster:"",ownerIndex:new Map(),ownerIndexAvailable:false,pendingAddApproval:null};
 const $=id=>document.getElementById(id);
 let barcodeInputTimer = null;
 
@@ -180,17 +180,19 @@ function renderLoadedCsvList(){const f=$("bundleFile").files[0];$("loadedCsvList
 async function readBundleCsv(input){const f=input.files[0];
 if(!f)throw new Error("inspection_bundle.csv が選択されていません");
 const rows=await f.text().then(parseCsv);
-const staffRows=[],itemRows=[],barcodeRows=[],aliasRows=[],noBarcodeRows=[],processedRows=[];
+const staffRows=[],itemRows=[],barcodeRows=[],aliasRows=[],noBarcodeRows=[],processedRows=[],ownerRows=[],ownerIndexRows=[];
 for(const r of rows){const t=String(r.record_type||"").trim().toUpperCase();
 if(t==="STAFF")staffRows.push(r);
 else if(t==="ITEM")itemRows.push(r);else if(t==="BARCODE")barcodeRows.push(r);
 else if(t==="ALIAS")aliasRows.push(r);
 else if(t==="NO_BARCODE")noBarcodeRows.push(r);
-else if(t==="PROCESSED")processedRows.push(r)}
+else if(t==="PROCESSED")processedRows.push(r);
+else if(t==="BARCODE_OWNER")ownerRows.push(r);
+else if(t==="BARCODE_OWNER_INDEX")ownerIndexRows.push(r)}
 if(!staffRows.length)throw new Error("STAFF行がありません");
 if(!itemRows.length && !processedRows.length)throw new Error("ITEM行またはPROCESSED行がありません");
 if(!barcodeRows.length && !noBarcodeRows.length)throw new Error("BARCODE行またはNO_BARCODE行がありません");
-return{staffRows,itemRows,barcodeRows,aliasRows,noBarcodeRows,processedRows}}
+return{staffRows,itemRows,barcodeRows,aliasRows,noBarcodeRows,processedRows,ownerRows,ownerIndexRows}}
 function normalizeBarcode(v){return String(v||"").replace(/[\s-]/g,"")}
 function normalizeSkuCode(v){
   return normalizeBarcode(v)
@@ -376,7 +378,13 @@ function markOk(r,method,read,qty){
     started_at:state.startedAt,
     checked_at:t,
     completed_at:"",
-    memo:""
+    memo:"",
+    barcode_action:"",
+    register_barcode:"",
+    existing_owner_skus:"",
+    owner_ref_status:"",
+    same_item_confirmed:"",
+    approved_at:""
   });
 }
 
@@ -431,6 +439,22 @@ function completeAdminBarcodeDecision(r, read, master, adminCode, decision, qty)
   }else if(decision === "replace_barcode"){
     markBarcodeReplaceAdmin(r, read, master, adminCode, qty);
     showMsg("itemMsg", "管理者確認OK。バーコード変更対象として記録しました", true);
+  }else if(decision === "add_barcode"){
+    const approval = state.pendingAddApproval;
+    if(!approval || approval.key !== itemKey(r) || approval.read !== read){
+      showMsg("itemMsg", "追加登録の確認情報が見つかりません。もう一度読み取ってください");
+      state.pendingAddApproval = null;
+      return;
+    }
+    markBarcodeAddAdmin(r, read, master, adminCode, qty, approval);
+    state.pendingAddApproval = null;
+    showMsg(
+      "itemMsg",
+      approval.owners.length
+        ? "管理者確認OK。共通バーコード登録として記録しました"
+        : "管理者確認OK。バーコード追加登録として記録しました",
+      true
+    );
   }
 
   setTimeout(goNextItem, 800);
@@ -489,6 +513,14 @@ function showAdminBarcodeDecisionQuantityModal(r, read, master, adminCode, decis
         label:"キャンセル",
         onClick:()=>{
           closeModal();
+
+          // 初回登録対象（登録済みバーコードなし）からの共通登録は、不一致画面ではなく読取待ちへ戻す
+          if(decision === "add_barcode" && state.pendingAddApproval?.fromNoBarcode){
+            state.pendingAddApproval = null;
+            focusBarcodeInput();
+            return;
+          }
+
           showBarcodeMismatch(r, read, master);
         }
       }
@@ -505,6 +537,308 @@ function showAdminBarcodeDecisionQuantityModal(r, read, master, adminCode, decis
       else input.value += k;
     };
   });
+}
+
+//==================================================
+// 2026-10-13 管理者承認の「追加登録・共通登録」
+//
+// ・既存の有効バーコードは変更しない（PC側でも追加のみ）
+// ・別SKUに登録済みのバーコードは、管理者が現物を見て
+//   「同一の商品」と確認した場合だけ共通登録として記録する
+// ・別SKUの登録状況を確認できない旧bundleでは受け付けない
+// ・PCは取込時に承認者・対象注文・現在のマスターを照合して正式登録する
+//==================================================
+function ownerKeyOf(barcode){
+  return normalizeBarcode(barcode).replace(/－/g, "").toUpperCase();
+}
+
+function addOwner(barcode, sku){
+  const key = ownerKeyOf(barcode);
+  const s = String(sku || "").trim();
+  if(!key || !s) return;
+  const set = state.ownerIndex.get(key) || new Set();
+  set.add(s);
+  state.ownerIndex.set(key, set);
+}
+
+function buildOwnerIndex(b){
+  state.ownerIndex = new Map();
+  state.ownerIndexAvailable = (b.ownerIndexRows || []).length > 0;
+
+  (b.ownerRows || []).forEach(r => addOwner(r.barcode, r.sku));
+
+  // 今回bundle内のBARCODE/ALIAS（商品マスターJAN由来を含む）も所有者として扱う
+  (b.barcodeRows || []).forEach(r => addOwner(r.barcode, r.sku));
+  (b.aliasRows || []).forEach(r => addOwner(r.barcode, r.sku));
+}
+
+// 読取値を登録している「今回SKU以外」のSKU一覧
+function getOtherOwnerSkus(sku, read){
+  const self = String(sku || "").trim().toUpperCase();
+  const set = state.ownerIndex.get(ownerKeyOf(read)) || new Set();
+  const owners = Array.from(set)
+    .filter(s => s.toUpperCase() !== self)
+    .sort();
+
+  return {available: state.ownerIndexAvailable, owners};
+}
+
+// 管理者確認画面用：登録済みバーコードをすべて表示し、「変更」で無効になる1本を示す。
+// 1本だけの場合は従来どおりの表示。
+function registeredBarcodesForDecisionText(sku, master){
+  const list = Array.from(new Set(allowedBarcodes(sku)));
+  if(list.length <= 1){
+    return escapeHtmlText(master || list[0] || "登録なし");
+  }
+  const target = normalizeBarcode(master || list[0]);
+  return list.map(b =>
+    escapeHtmlText(b) + (b === target ? "（「変更する」でこの1本だけ無効になります）" : "（変更しても有効のまま）")
+  ).join("<br>");
+}
+
+function allowedBarcodesText(sku){
+  const list = Array.from(new Set(allowedBarcodes(sku)));
+  return list.length ? list.map(escapeHtmlText).join("<br>") : "登録なし";
+}
+
+// 初回登録対象の商品で、読取値が別SKUに登録済みだった場合
+function showNoBarcodeCrossSkuNotice(r, read, owners){
+  showModal(
+    "別の品番に登録済みのバーコードです",
+    `<p><strong>品番</strong><br>${escapeHtmlText(r.sku)}</p>
+     <p><strong>商品名</strong><br>${escapeHtmlText(r.item_name || "")}</p>
+     <p><strong>今回読取</strong><br>${escapeHtmlText(read)}</p>
+     <p><strong>このバーコードが登録されている品番</strong><br>${owners.map(escapeHtmlText).join("<br>")}</p>
+     <p class="msg">
+       このバーコードは別の品番に登録されています。<br>
+       商品を取り違えていないか確認してください。<br>
+       同じ商品として登録する場合は、管理者確認が必要です。
+     </p>`,
+    [
+      {
+        label:"再スキャン",
+        onClick:()=>{
+          closeModal();
+          focusBarcodeInput();
+        }
+      },
+      {
+        label:"管理者確認",
+        kind:"primary",
+        onClick:()=>{
+          closeModal();
+          showAdminCodeForAdd(r, read);
+        }
+      },
+      {
+        label:"保留",
+        kind:"danger",
+        onClick:()=>{
+          closeModal();
+          showHoldModal(r);
+        }
+      }
+    ]
+  );
+}
+
+function showAdminCodeForAdd(r, read){
+  showModal(
+    "管理者社員番号",
+    `<p>別の品番に登録済みのバーコードのため、管理者確認が必要です。</p>
+     <input id="addAdminCodeInput" class="input big" inputmode="numeric" pattern="[0-9]*" autocomplete="off" readonly>
+     <div class="keypad">
+       <button type="button" data-add-admin-key="1">1</button>
+       <button type="button" data-add-admin-key="2">2</button>
+       <button type="button" data-add-admin-key="3">3</button>
+       <button type="button" data-add-admin-key="4">4</button>
+       <button type="button" data-add-admin-key="5">5</button>
+       <button type="button" data-add-admin-key="6">6</button>
+       <button type="button" data-add-admin-key="7">7</button>
+       <button type="button" data-add-admin-key="8">8</button>
+       <button type="button" data-add-admin-key="9">9</button>
+       <button type="button" data-add-admin-key="clear">C</button>
+       <button type="button" data-add-admin-key="0">0</button>
+       <button type="button" data-add-admin-key="back">←</button>
+     </div>
+     <p id="addAdminMsg" class="msg"></p>`,
+    [
+      {
+        label:"確認",
+        kind:"primary",
+        onClick:()=>{
+          const code = $("addAdminCodeInput").value.trim();
+
+          if(!code){
+            $("addAdminMsg").textContent = "管理者社員番号を入力してください";
+            return;
+          }
+
+          const admin = state.staffList.find(
+            s =>
+              s.staff_code === code &&
+              s.active_flag === "1" &&
+              s.is_admin === "1"
+          );
+
+          if(!admin){
+            $("addAdminMsg").textContent = "管理者社員番号が確認できません";
+            return;
+          }
+
+          closeModal();
+          showAdminBarcodeAddConfirm(r, read, "", admin, true);
+        }
+      },
+      {
+        label:"キャンセル",
+        onClick:()=>{
+          closeModal();
+          focusBarcodeInput();
+        }
+      }
+    ]
+  );
+
+  document.querySelectorAll("[data-add-admin-key]").forEach(btn=>{
+    btn.onclick = ()=>{
+      const input = $("addAdminCodeInput");
+      const key = btn.dataset.addAdminKey;
+
+      if(key === "clear") input.value = "";
+      else if(key === "back") input.value = input.value.slice(0, -1);
+      else input.value += key;
+
+      $("addAdminMsg").textContent = "";
+    };
+  });
+}
+
+// 管理者による追加登録・共通登録の最終確認
+function showAdminBarcodeAddConfirm(r, read, master, admin, fromNoBarcode){
+  const backToPrevious = ()=>{
+    state.pendingAddApproval = null;
+    if(fromNoBarcode){
+      focusBarcodeInput();
+    }else{
+      showBarcodeMismatch(r, read, master);
+    }
+  };
+
+  const ownerInfo = getOtherOwnerSkus(r.sku, read);
+
+  // 別SKUの登録状況を確認できない場合は、未登録と推測して承認しない
+  if(!ownerInfo.available){
+    showModal(
+      "追加登録できません",
+      `<p>このスマホ検品データには、他の品番のバーコード登録状況が含まれていません。</p>
+       <p>別の品番に登録済みかどうか確認できないため、追加登録・共通登録はできません。</p>
+       <p class="msg">PCで「スマホ検品CSV作成」をやり直したデータを読み込むか、保留にしてください。</p>`,
+      [
+        {label:"戻る", kind:"primary", onClick:()=>{ closeModal(); backToPrevious(); }},
+        {label:"保留", kind:"danger", onClick:()=>{ closeModal(); state.pendingAddApproval = null; showHoldModal(r); }}
+      ]
+    );
+    return;
+  }
+
+  const isCommon = ownerInfo.owners.length > 0;
+  const title = isCommon ? "共通バーコード登録の確認" : "バーコード追加登録の確認";
+  const checkText = isCommon
+    ? "現物を確認し、上の品番と同じ商品であることを確認しました"
+    : "現物の品番と今回読取バーコードが正しいことを確認しました";
+
+  showModal(
+    title,
+    `<p><strong>品番</strong><br>${escapeHtmlText(r.sku)}</p>
+     <p><strong>商品名</strong><br>${escapeHtmlText(r.item_name || "")}</p>
+     <p><strong>今回読取</strong><br>${escapeHtmlText(read)}</p>
+     <p><strong>この品番の登録済みバーコード（そのまま有効）</strong><br>${allowedBarcodesText(r.sku)}</p>
+     ${isCommon
+       ? `<p><strong>このバーコードが登録されている別の品番</strong><br>${ownerInfo.owners.map(escapeHtmlText).join("<br>")}</p>
+          <p class="msg">別の品番と同じバーコードを共通で使います。<br>
+          違う商品の場合は登録せず「保留」にしてください。</p>`
+       : `<p class="msg">今の登録バーコードは消さずに、今回読取バーコードを追加します。</p>`}
+     <label class="label"><input type="checkbox" id="addSameItemCheck"> ${checkText}</label>
+     <p id="addConfirmMsg" class="msg"></p>`,
+    [
+      {
+        label: isCommon ? "共通登録する" : "追加登録する",
+        kind:"primary",
+        onClick:()=>{
+          if(!$("addSameItemCheck").checked){
+            $("addConfirmMsg").textContent = "現物を確認してチェックを入れてください";
+            return;
+          }
+
+          state.pendingAddApproval = {
+            key: itemKey(r),
+            read,
+            owners: ownerInfo.owners,
+            ownerRefStatus: "available",
+            fromNoBarcode: !!fromNoBarcode
+          };
+
+          closeModal();
+
+          if(Number(r.quantity || 1) >= 2){
+            showAdminBarcodeDecisionQuantityModal(r, read, master, admin.staff_code, "add_barcode");
+            return;
+          }
+
+          completeAdminBarcodeDecision(r, read, master, admin.staff_code, "add_barcode", "1");
+        }
+      },
+      {
+        label:"保留",
+        kind:"danger",
+        onClick:()=>{
+          closeModal();
+          state.pendingAddApproval = null;
+          showHoldModal(r);
+        }
+      },
+      {
+        label:"キャンセル",
+        onClick:()=>{
+          closeModal();
+          backToPrevious();
+        }
+      }
+    ]
+  );
+}
+
+function markBarcodeAddAdmin(r, read, master, adminCode, qty, approval){
+  const isCommon = approval.owners.length > 0;
+
+  markOk(r, isCommon ? "barcode_common_add_admin" : "barcode_add_admin", read, qty);
+
+  const res = getResult(r);
+  if(res){
+    res.master_barcode = master || state.barcodeMap.get(r.sku) || "";
+    res.admin_staff_code = adminCode || "";
+    res.barcode_register_flag = "1";
+    res.admin_review_required = "0";
+    res.barcode_action = isCommon ? "add_common_sku" : "add_same_sku";
+    res.register_barcode = normalizeBarcode(read).replace(/－/g, "");
+    res.existing_owner_skus = approval.owners.join("|");
+    res.owner_ref_status = approval.ownerRefStatus;
+    res.same_item_confirmed = "1";
+    res.approved_at = nowText();
+    res.memo = isCommon
+      ? `管理者現物確認済み。別品番(${approval.owners.join("|")})と同一商品として共通登録`
+      : "管理者現物確認済み。登録済みバーコードを残して追加登録";
+    saveProgressToLocal();
+  }
+
+  // 同じCSV内で同じSKUが再度出た場合、追加したバーコードを許可扱いにする
+  const arr = state.aliasMap.get(r.sku) || [];
+  if(!arr.includes(read)) arr.push(read);
+  state.aliasMap.set(r.sku, arr);
+
+  // 以後の共通登録確認で、このSKUも登録済みとして表示する
+  addOwner(read, r.sku);
 }
 
 function markHold(r,reason,memo=""){
@@ -528,7 +862,13 @@ function markHold(r,reason,memo=""){
     started_at:state.startedAt,
     checked_at:t,
     completed_at:"",
-    memo:memo
+    memo:memo,
+    barcode_action:"",
+    register_barcode:"",
+    existing_owner_skus:"",
+    owner_ref_status:"",
+    same_item_confirmed:"",
+    approved_at:""
   });
 }
 
@@ -557,6 +897,15 @@ function handleBarcode(raw){
   if(!allowed.length && isNoBarcodeItem){
     state.lastMismatchBarcode = "";
     state.lastMismatchMaster = "";
+
+    // 2026-10-13 読取値が別SKUに登録済みと確認できた場合だけ、
+    // スタッフ単独の初回登録にせず管理者の共通登録確認へ進める。
+    // 別SKU登録が無い場合・確認できない旧bundleの場合は従来の初回登録のまま。
+    const ownerInfo = getOtherOwnerSkus(r.sku, read);
+    if(ownerInfo.available && ownerInfo.owners.length){
+      return showNoBarcodeCrossSkuNotice(r, read, ownerInfo.owners);
+    }
+
     return showNoBarcodeRegister(r, read);
   }
 
@@ -689,14 +1038,16 @@ function showAdminRegister(r, read, master){
             "管理者確認",
             `<p><strong>品番</strong><br>${r.sku}</p>
              <p><strong>商品名</strong><br>${r.item_name || ""}</p>
-             <p><strong>登録済みバーコード</strong><br>${master || "登録なし"}</p>
+             <p><strong>登録済みバーコード</strong><br>${registeredBarcodesForDecisionText(r.sku, master)}</p>
              <p><strong>今回読取</strong><br>${read}</p>
              <p class="msg">
                現物を確認して、処理を選んでください。<br>
                商品は正しいが今回読取バーコードを登録しない場合は
                「商品OK・バーコードは登録しない」を選んでください。<br>
                今回読取バーコードを今後の正しいバーコードにする場合だけ
-               「バーコードを変更する」を選んでください。
+               「バーコードを変更する」を選んでください。<br>
+               登録済みバーコードも有効のまま、今回読取バーコードも使えるようにする場合は
+               「バーコードを追加登録する」を選んでください。
              </p>`,
             [
               {
@@ -751,6 +1102,14 @@ function showAdminRegister(r, read, master){
                     "replace_barcode",
                     "1"
                   );
+                }
+              },
+              {
+                label:"バーコードを追加登録する（今の登録も残す）",
+                kind:"primary",
+                onClick:()=>{
+                  closeModal();
+                  showAdminBarcodeAddConfirm(r, read, master, admin, false);
                 }
               },
               {
@@ -1146,7 +1505,14 @@ const RESULT_HEADERS = [
   "started_at",
   "checked_at",
   "completed_at",
-  "memo"
+  "memo",
+  // 2026-10-13 追加登録・共通登録の承認記録（末尾追加・既存列は不変）
+  "barcode_action",
+  "register_barcode",
+  "existing_owner_skus",
+  "owner_ref_status",
+  "same_item_confirmed",
+  "approved_at"
 ];
 
 function getLocalProgress(){
@@ -1728,6 +2094,7 @@ $("loadCsvBtn").onclick=async()=>{try{const b=await readBundleCsv($("bundleFile"
     state.aliasMap.set(r.sku,arr)});
     state.noBarcodeSet.clear();
     b.noBarcodeRows.forEach(r=>{if(r.sku)state.noBarcodeSet.add(r.sku)});
+    buildOwnerIndex(b);
 
     restoreResultsFromLocal();
     updateStaffLabels();
