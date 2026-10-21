@@ -180,7 +180,7 @@ function renderLoadedCsvList(){const f=$("bundleFile").files[0];$("loadedCsvList
 async function readBundleCsv(input){const f=input.files[0];
 if(!f)throw new Error("inspection_bundle.csv が選択されていません");
 const rows=await f.text().then(parseCsv);
-const staffRows=[],itemRows=[],barcodeRows=[],aliasRows=[],noBarcodeRows=[],processedRows=[],ownerRows=[],ownerIndexRows=[];
+const staffRows=[],itemRows=[],barcodeRows=[],aliasRows=[],noBarcodeRows=[],processedRows=[],ownerRows=[],ownerIndexRows=[],parcelRows=[];
 for(const r of rows){const t=String(r.record_type||"").trim().toUpperCase();
 if(t==="STAFF")staffRows.push(r);
 else if(t==="ITEM")itemRows.push(r);else if(t==="BARCODE")barcodeRows.push(r);
@@ -188,11 +188,12 @@ else if(t==="ALIAS")aliasRows.push(r);
 else if(t==="NO_BARCODE")noBarcodeRows.push(r);
 else if(t==="PROCESSED")processedRows.push(r);
 else if(t==="BARCODE_OWNER")ownerRows.push(r);
-else if(t==="BARCODE_OWNER_INDEX")ownerIndexRows.push(r)}
+else if(t==="BARCODE_OWNER_INDEX")ownerIndexRows.push(r)
+else if(t==="PARCEL")parcelRows.push(r)/* 段階7：ヤマトの複数個口 */}
 if(!staffRows.length)throw new Error("STAFF行がありません");
 if(!itemRows.length && !processedRows.length)throw new Error("ITEM行またはPROCESSED行がありません");
 if(!barcodeRows.length && !noBarcodeRows.length)throw new Error("BARCODE行またはNO_BARCODE行がありません");
-return{staffRows,itemRows,barcodeRows,aliasRows,noBarcodeRows,processedRows,ownerRows,ownerIndexRows}}
+return{staffRows,itemRows,barcodeRows,aliasRows,noBarcodeRows,processedRows,ownerRows,ownerIndexRows,parcelRows}}
 function normalizeBarcode(v){return String(v||"").replace(/[\s-]/g,"")}
 function normalizeSkuCode(v){
   return normalizeBarcode(v)
@@ -292,7 +293,7 @@ if(startBtn){
     startBtn.textContent = "検品開始";
   }
 }
-  $("progressLabel").innerHTML =
+  $("progressLabel").innerHTML = parcelInfoHtml() +
     `<div class="progressChips">
       <span class="chip pending">未検品 ${pending}</span>
       <span class="chip ok">✓ OK ${ok}</span>
@@ -1512,7 +1513,9 @@ const RESULT_HEADERS = [
   "existing_owner_skus",
   "owner_ref_status",
   "same_item_confirmed",
-  "approved_at"
+  "approved_at",
+  // 段階7：実際に読んだ送り状番号（監査用。invoice_no は代表の番号）
+  "scanned_invoice_no"
 ];
 
 function getLocalProgress(){
@@ -1770,6 +1773,7 @@ function buildCurrentResultRows(){
       barcode_register_flag: r.barcode_register_flag || "0",
       admin_review_required: r.admin_review_required || "0",
       ...r,
+      scanned_invoice_no: state.scannedInvoice || state.currentInvoice,
       completed_at: completedAt
     }));
 }
@@ -2077,7 +2081,7 @@ $("staffCodeInput").addEventListener("keydown", e=>{
   }
 });
 $("bundleFile").addEventListener("change",renderLoadedCsvList);
-$("loadCsvBtn").onclick=async()=>{try{const b=await readBundleCsv($("bundleFile"));state.staffList=b.staffRows;state.inspectionRows=b.itemRows;state.processedRows=b.processedRows||[];const staff=state.staffList.find(s=>s.staff_code===state.pendingStaffCode&&s.active_flag==="1");if(!staff){
+$("loadCsvBtn").onclick=async()=>{try{const b=await readBundleCsv($("bundleFile"));state.staffList=b.staffRows;state.inspectionRows=b.itemRows;state.processedRows=b.processedRows||[];buildParcelMap(b.parcelRows||[]);const staff=state.staffList.find(s=>s.staff_code===state.pendingStaffCode&&s.active_flag==="1");if(!staff){
       showModal("社員番号エラー",
         `<p>社員番号が登録されていない、または使用できません。</p>
          <p>入力した社員番号：${state.pendingStaffCode}</p>`,
@@ -2140,6 +2144,30 @@ function clearInvoiceInput(){
   focusInvoiceInput();
 }
 
+// 段階7：ヤマトの複数個口。どの個口の番号を読んでも、代表の番号で検品する（進捗・結果は代表で一元化）
+function buildParcelMap(rows){
+  state.parcelRepOf = new Map();
+  state.parcelListOf = new Map();
+  (rows || []).forEach(r => {
+    const inv = normalizeInvoiceNo(r.invoice_no);
+    const rep = normalizeInvoiceNo(r.source);
+    if(!inv || !rep) return;
+    state.parcelRepOf.set(inv, rep);
+    if(!state.parcelListOf.has(rep)) state.parcelListOf.set(rep, []);
+    const list = state.parcelListOf.get(rep);
+    if(!list.includes(inv)) list.push(inv);
+  });
+}
+function parcelRepOf(inv){
+  return (state.parcelRepOf && state.parcelRepOf.get(inv)) || "";
+}
+function parcelInfoHtml(){
+  const list = (state.parcelListOf && state.parcelListOf.get(state.currentInvoice)) || [];
+  if(list.length < 2) return "";
+  const scanned = state.scannedInvoice || state.currentInvoice;
+  return `<div class="msg parcelInfo">この注文は${list.length}個口です（代表：${state.currentInvoice}／ほか：${list.filter(x=>x!==state.currentInvoice).join("・")}）。どの送り状でも同じ検品画面です。読んだ送り状：${scanned}</div>`;
+}
+
 function getProcessedInvoice(inv){
   return (state.processedRows || []).find(r => normalizeInvoiceNo(r.invoice_no) === inv);
 }
@@ -2174,7 +2202,10 @@ function showProcessedInvoiceModal(inv, processed){
 }
 
 $("invoiceSearchBtn").onclick=()=>{
-  const inv=normalizeInvoiceNo($("invoiceInput").value);
+  const scannedInv=normalizeInvoiceNo($("invoiceInput").value);
+  // 段階7：個口の番号なら代表の番号に読み替える（読んだ番号は scanned_invoice_no として残す）
+  const inv=parcelRepOf(scannedInv)||scannedInv;
+  state.scannedInvoice=scannedInv;
 
   if(!inv){
     showMsg("invoiceMsg","送り状Noを読み込んでください");
