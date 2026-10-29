@@ -1534,16 +1534,31 @@ function saveProgressToLocal(){
   );
 }
 
+// P9修正：PC の取込が拒否する結果か（無効にした番号を、無効にした時刻以降に読んで完了したもの）。
+// 判定は PC の取込（PL_CheckResultFiles）と同じ。完了していない途中の記録（completed_at が空）は対象外
+function isVoidRejectedResult(row){
+  const doneAt = String(row.completed_at || "").trim();
+  if(!doneAt) return false;
+  const sc = normalizeInvoiceNo(row.scanned_invoice_no || "");
+  const voidAt = sc && state.voidAt ? (state.voidAt.get(sc) || "") : "";
+  return voidAt !== "" && doneAt >= voidAt;
+}
+
 function restoreResultsFromLocal(){
   const validKeys = new Set(
     (state.inspectionRows || []).map(r => itemKey(r))
   );
 
   const merged = new Map();
+  const rejected = new Map();
 
   getLocalResults().forEach(row => {
     const key = row.key || itemKey(row);
     if(validKeys.has(key)){
+      if(isVoidRejectedResult(row)){
+        rejected.set(key, row);
+        return;
+      }
       merged.set(key, {...row, key});
     }
   });
@@ -1551,12 +1566,46 @@ function restoreResultsFromLocal(){
   getLocalProgress().forEach(row => {
     const key = row.key || itemKey(row);
     if(validKeys.has(key)){
+      const rej = rejected.get(key);
+      // 拒否される完了と同じ検品の途中記録（その完了より前に読んだもの）も引き継がない。後で検品し直した記録は残す
+      if(isVoidRejectedResult(row) || (rej && String(row.checked_at || "") <= String(rej.completed_at || ""))){
+        if(!rej) rejected.set(key, row);
+        merged.delete(key);
+        return;
+      }
       merged.set(key, {...row, key});
     }
   });
 
   state.results = Array.from(merged.values());
+  state.voidRejected = Array.from(rejected.values());
+
+  if(rejected.size > 0){
+    saveLocalResults(getLocalResults().filter(row => !isVoidRejectedResult(row)));
+  }
+
   saveProgressToLocal();
+}
+
+// P9修正：引き継がなかった結果を知らせる（新しいラベルで検品し直す）
+function showVoidRejectedNotice(){
+  const list = state.voidRejected || [];
+
+  if(!list.length){
+    return;
+  }
+
+  const lines = list.map(r =>
+    `注文 ${escapeHtmlText(r.order_no || "")}　${escapeHtmlText(r.sku || "")}（読んだ送り状：${escapeHtmlText(r.scanned_invoice_no || r.invoice_no || "")}）`
+  ).join("<br>");
+
+  showModal(
+    "再検品が必要です",
+    `<p>再発行の前の送り状番号（無効にした番号）を、無効にした後に読んで完了した検品結果は、PCで取り込めないため、引き継いでいません。</p>
+     <p>${lines}</p>
+     <p>新しいラベルを読んで、検品し直してください。</p>`,
+    [{label:"確認した",kind:"primary",onClick:closeModal}]
+  );
 }
 
 function getLocalResults(){
@@ -2107,6 +2156,7 @@ $("loadCsvBtn").onclick=async()=>{try{const b=await readBundleCsv($("bundleFile"
 
 show("scanInvoiceView");
 resetInvoiceScreen();
+showVoidRejectedNotice();
 }catch(e){showMsg("loadMsg","CSV読込に失敗しました： "+e.message)}};
 
 if($("changeStaffBtn")) $("changeStaffBtn").onclick=showChangeStaffModal;
@@ -2151,11 +2201,15 @@ function buildParcelMap(rows){
   state.parcelListOf = new Map();
   // 段階7e：再発行の前の番号（reason=VOID）は読ませない
   state.voidInvoices = new Set();
+  // P9修正：無効にした時刻（PC の registered_at）。取込の判定と同じ時刻で、引き継がない結果を決める
+  state.voidAt = new Map();
   (rows || []).forEach(r => {
     const inv = normalizeInvoiceNo(r.invoice_no);
     const rep = normalizeInvoiceNo(r.source);
     if(String(r.reason || "").trim().toUpperCase() === "VOID"){
       if(inv) state.voidInvoices.add(inv);
+      const voidAt = String(r.registered_at || "").trim();
+      if(inv && voidAt) state.voidAt.set(inv, voidAt);
       return;
     }
     if(!inv || !rep) return;
