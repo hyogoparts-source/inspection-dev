@@ -1960,7 +1960,7 @@ function downloadBatchCsv(){
   const p = n => String(n).padStart(2, "0");
 
   const name =
-    `inspection_result_batch_` +
+    `TEST_inspection_result_batch_` +
     `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}_` +
     `${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}.csv`;
 
