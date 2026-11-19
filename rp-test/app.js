@@ -2837,7 +2837,8 @@ function askDeviceNameIfEmpty(){
 function openDeviceNameModal(){
   const cur = getDeviceName();
   showModal("この端末の名前",
-    "<p>この iPhone の名前を入れてください（例：黄色、水色）。<br>画面の上に出ます。端末ごとに別の名前にしてください。</p>" +
+    "<p>この iPhone の名前を入れてください（例：水色、ピンク）。<br>画面の上に出ます。端末ごとに別の名前にしてください。</p>" +
+    "<p><strong>名前を入れたら、キーボードを「ABC」（英語）に戻してください。</strong><br>日本語のままだと、スキャンした送り状Noがひらがなになります。<br>スキャナーをつないでいるとキーボードが出ません。スキャナーの電源を切る → 送り状Noの欄を押す → 地球のマークで「ABC」→ スキャナーの電源を入れる。</p>" +
     `<input id="deviceNameInput" class="input big" maxlength="12" value="${escapeHtmlText(cur)}" autocomplete="off">` +
     '<p id="deviceNameMsg" class="msg"></p>',
     [{label:"決定", kind:"primary", onClick:()=>{
