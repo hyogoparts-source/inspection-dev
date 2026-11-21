@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>入力の確認（試験用・検品はしません）</title>
+<style>
+body{font-family:-apple-system,sans-serif;margin:10px;font-size:15px}
+h1{font-size:17px;color:#b00020;margin:4px 0}
+.input{font-size:20px;width:95%;padding:6px}
+.btn{font-size:16px;padding:8px 10px;margin:4px 4px 4px 0}
+.hiddenInput{position:fixed;left:-9999px;top:-9999px;width:1px;height:1px;opacity:0;pointer-events:none}
+#log{font-family:ui-monospace,monospace;font-size:11px;white-space:pre-wrap;background:#f4f4f4;border:1px solid #ccc;padding:4px;max-height:45vh;overflow:auto}
+.box{border:1px solid #999;padding:6px;margin:6px 0}
+#stage{font-weight:700}
+</style>
+</head>
+<body>
+<h1>入力の確認（試験用。検品・登録はしません）</h1>
+<div>画面：<span id="stage">送り状</span>　フォーカス：<span id="ae"></span></div>
+<div class="box" id="invBox">
+  <div>送り状No（検品のページと同じ欄）</div>
+  <input id="invoiceInput" class="input" type="text" inputmode="text" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
+</div>
+<div class="box" id="itemBox" style="display:none">
+  <div>商品の画面（見えない欄で受け取る。検品のページと同じ作り）</div>
+  <div>欄の中身：<span id="val"></span></div>
+  <input id="barcodeInput" class="hiddenInput" type="text" inputmode="none" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
+  <button class="btn" id="backBtn">送り状に戻る</button>
+</div>
+<button class="btn" id="saveBtn">記録を保存</button>
+<button class="btn" id="clearBtn">記録を消す</button>
+<div id="log"></div>
+<script>
+const $=id=>document.getElementById(id);
+const t0=performance.now(); const lines=[];
+function cp(s){return Array.from(String(s==null?"":s)).map(c=>{const n=c.codePointAt(0);return n>=0x21&&n<=0x7e?c:"U+"+n.toString(16).toUpperCase().padStart(4,"0")}).join("")}
+function log(s){const l=((performance.now()-t0)/1000).toFixed(3)+" "+s;lines.push(l);const el=$("log");el.textContent=lines.slice(-200).join("\n");el.scrollTop=el.scrollHeight}
+function ae(){const a=document.activeElement;$("ae").textContent=a?(a.id||a.tagName):"なし"}
+setInterval(()=>{ae();$("val").textContent=cp($("barcodeInput").value)},200);
+log("start ua="+navigator.userAgent);
+for(const id of ["invoiceInput","barcodeInput"]){
+  const el=$(id), tag=id==="invoiceInput"?"INV":"BAR";
+  for(const ev of ["keydown","keyup","keypress"]) el.addEventListener(ev,e=>log(`${tag} ${ev} key=${cp(e.key)} code=${e.code} kc=${e.keyCode} comp=${e.isComposing} val=${cp(el.value)}`));
+  for(const ev of ["beforeinput","input"]) el.addEventListener(ev,e=>log(`${tag} ${ev} type=${e.inputType} data=${cp(e.data)} comp=${e.isComposing} val=${cp(el.value)}`));
+  for(const ev of ["compositionstart","compositionupdate","compositionend"]) el.addEventListener(ev,e=>log(`${tag} ${ev} data=${cp(e.data)} val=${cp(el.value)}`));
+  for(const ev of ["focus","blur","change"]) el.addEventListener(ev,()=>log(`${tag} ${ev} val=${cp(el.value)}`));
+}
+// 送り状の欄：Enter で商品の画面へ（検品のページと同じく、keydown の中で見えない欄にフォーカスを移す）
+$("invoiceInput").addEventListener("keydown",e=>{
+  if(e.key==="Enter"){e.preventDefault();const v=$("invoiceInput").value;log("INV -> open item, invoice="+cp(v));$("invoiceInput").value="";openItem()}
+});
+function openItem(){$("invBox").style.display="none";$("itemBox").style.display="";$("stage").textContent="商品";const b=$("barcodeInput");b.value="";b.focus();requestAnimationFrame(()=>b.focus());setTimeout(()=>b.focus(),30);setTimeout(()=>b.focus(),80)}
+$("barcodeInput").addEventListener("keydown",e=>{if(e.key==="Enter"){log("BAR Enter seen; value now="+cp($("barcodeInput").value))}});
+$("backBtn").onclick=()=>{log("back to invoice");$("itemBox").style.display="none";$("invBox").style.display="";$("stage").textContent="送り状";$("invoiceInput").focus()};
+$("clearBtn").onclick=()=>{lines.length=0;log("cleared ua="+navigator.userAgent)};
+$("saveBtn").onclick=()=>{const d=new Date(),p=n=>String(n).padStart(2,"0");const name=`TEST_keylog_${d.getFullYear()}${p(d.getMonth()+1)}${p(d.getDate())}_${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}.txt`;
+  const url=URL.createObjectURL(new Blob([lines.join("\r\n")],{type:"text/plain"}));const a=document.createElement("a");a.href=url;a.download=name;document.body.appendChild(a);a.click();a.remove();log("saved "+name)};
+$("invoiceInput").focus();
+</script>
+</body>
+</html>
