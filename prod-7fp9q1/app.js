@@ -2,10 +2,13 @@
 const state={staff:null,staffList:[],inspectionRows:[],processedRows:[],barcodeMap:new Map(),aliasMap:new Map(),noBarcodeSet:new Set(),currentInvoice:null,currentItems:[],currentIndex:0,results:[],startedAt:null,lastReadBarcode:"",lastMismatchBarcode:"",lastMismatchMaster:"",ownerIndex:new Map(),ownerIndexAvailable:false,pendingAddApproval:null};
 const $=id=>document.getElementById(id);
 let barcodeInputTimer = null;
+let barcodeComposing = false; // 2026-11-21：日本語の変換の途中
+let barcodePendingEnter = false; let barcodePendingTimer = null; let barcodeComposeTimer = null; // fix2
 
 function show(id){
   document.querySelectorAll(".view").forEach(v=>v.classList.remove("active"));
   $(id).classList.add("active");
+  if(id==="scanInvoiceView"){try{renderStatusBar();askDeviceNameIfEmpty();}catch(e){}}
 }
 function showMsg(id,text,ok=false){const el=$(id);el.textContent=text||"";el.style.color=ok?"#047857":"#b91c1c"}
 
@@ -142,6 +145,8 @@ function focusBarcodeInput(){
   if(!input) return;
 
   input.value = "";
+  barcodeComposing = false; // 2026-11-21
+  barcodePendingEnter = false; clearTimeout(barcodePendingTimer); clearTimeout(barcodeComposeTimer); // fix2
 
   // すぐフォーカス
   input.focus();
@@ -180,7 +185,7 @@ function renderLoadedCsvList(){const f=$("bundleFile").files[0];$("loadedCsvList
 async function readBundleCsv(input){const f=input.files[0];
 if(!f)throw new Error("inspection_bundle.csv が選択されていません");
 const rows=await f.text().then(parseCsv);
-const staffRows=[],itemRows=[],barcodeRows=[],aliasRows=[],noBarcodeRows=[],processedRows=[],ownerRows=[],ownerIndexRows=[],parcelRows=[];
+const staffRows=[],itemRows=[],barcodeRows=[],aliasRows=[],noBarcodeRows=[],processedRows=[],ownerRows=[],ownerIndexRows=[],parcelRows=[],metaRows=[];
 for(const r of rows){const t=String(r.record_type||"").trim().toUpperCase();
 if(t==="STAFF")staffRows.push(r);
 else if(t==="ITEM")itemRows.push(r);else if(t==="BARCODE")barcodeRows.push(r);
@@ -189,11 +194,12 @@ else if(t==="NO_BARCODE")noBarcodeRows.push(r);
 else if(t==="PROCESSED")processedRows.push(r);
 else if(t==="BARCODE_OWNER")ownerRows.push(r);
 else if(t==="BARCODE_OWNER_INDEX")ownerIndexRows.push(r)
-else if(t==="PARCEL")parcelRows.push(r)/* 段階7：ヤマトの複数個口 */}
+else if(t==="PARCEL")parcelRows.push(r)/* 段階7：ヤマトの複数個口 */
+else if(t==="META")metaRows.push(r)/* 2026-11-17：検品用CSVの作成日時 */}
 if(!staffRows.length)throw new Error("STAFF行がありません");
 if(!itemRows.length && !processedRows.length)throw new Error("ITEM行またはPROCESSED行がありません");
 if(!barcodeRows.length && !noBarcodeRows.length)throw new Error("BARCODE行またはNO_BARCODE行がありません");
-return{staffRows,itemRows,barcodeRows,aliasRows,noBarcodeRows,processedRows,ownerRows,ownerIndexRows,parcelRows}}
+return{staffRows,itemRows,barcodeRows,aliasRows,noBarcodeRows,processedRows,ownerRows,ownerIndexRows,parcelRows,bundleCreatedAt:(metaRows[0]&&metaRows[0].updated_at)||""}}
 function normalizeBarcode(v){return String(v||"").replace(/[\s-]/g,"")}
 function normalizeSkuCode(v){
   return normalizeBarcode(v)
@@ -333,6 +339,16 @@ setTimeout(() => {
 }, 80);
 }
 
+// 2026-11-21：送り状を読んだ後、検品対象が1明細なら「検品開始」を押さずに商品の画面を開く
+// （未検品のときだけ。複数個口・再発行の案内が出る注文は、案内を見てもらうため一覧のまま）
+function openSingleItemIfReady(){
+  const items = state.currentItems || [];
+  if(items.length !== 1) return;
+  if(statusOf(items[0]) !== "未検品") return;
+  if(parcelInfoHtml() !== "") return;
+  state.currentIndex = 0;
+  renderItem();
+}
 function firstPendingIndex(){return state.currentItems.findIndex(r=>statusOf(r)==="未検品")}
 function renderItem(){const r=state.currentItems[state.currentIndex];if(!r)return renderComplete();
 $("itemInvoice").textContent=r.invoice_no||"";
@@ -577,11 +593,64 @@ function buildOwnerIndex(b){
 function getOtherOwnerSkus(sku, read){
   const self = String(sku || "").trim().toUpperCase();
   const set = state.ownerIndex.get(ownerKeyOf(read)) || new Set();
-  const owners = Array.from(set)
+  // 2026-11-21：この端末でOKにしてまだPCに取り込んでいない登録（初回・追加・共通）も所有者に数える
+  const sessionOwners = sessionRegisteredOwners(read).filter(s => s.toUpperCase() !== self);
+  // 2026-11-21：純正品番のラベル（品番＋チェック文字。例 N243691N7PR$）は、品番で登録された別の品番も所有者に数える
+  const partCodeOwners = partCodeOwnersOf(read);
+  // 2026-11-21：左右・前後に分けた部品で、もう片方の品番のラベルを読んだとき（どちらも未登録でも止める）
+  const bundleOwners = bundlePartCodeOwnersOf(sku, read);
+  const owners = Array.from(new Set([...Array.from(set), ...sessionOwners, ...partCodeOwners, ...bundleOwners]))
     .filter(s => s.toUpperCase() !== self)
     .sort();
 
-  return {available: state.ownerIndexAvailable, owners};
+  return {available: state.ownerIndexAvailable, owners, sessionOwners, bundleOwners};
+}
+
+// 2026-11-21：検品データ（ITEM行）にある別の品番のうち、読取値がその品番の純正品番ラベルに当たるもの。
+// 読取値がこの行の品番のラベルにも当たるときは、この行のものとみなして何も返さない。
+function bundlePartCodeOwnersOf(sku, read){
+  const self = String(sku || "").trim();
+  if(!read || !self) return [];
+  if(isMazdaPartCodeMatch(read, self)) return [];
+  const out = new Set();
+  (state.inspectionRows || []).forEach(x => {
+    const s = String((x && x.sku) || "").trim();
+    if(s && s.toUpperCase() !== self.toUpperCase() && isMazdaPartCodeMatch(read, s)) out.add(s);
+  });
+  return Array.from(out);
+}
+
+// 2026-11-21：この端末の検品結果（検品中の行と、端末に保存した結果）のうち、OK で barcode_register_flag=1 の行のバーコードと品番。
+// 同じ箱を、前後・左右など別の構成部品にも初回登録してしまうのを防ぐため（送り状が別でも、PCへ取り込む前なら同じ）
+function sessionRegisteredOwners(read){
+  const key = ownerKeyOf(read);
+  const out = new Set();
+  if(!key) return [];
+  let saved = [];
+  try{ saved = getLocalResults() || []; }catch(e){ saved = []; }
+  (state.results || []).concat(saved).forEach(x => {
+    if(!x || x.status !== "OK" || String(x.barcode_register_flag) !== "1") return;
+    const s = String(x.sku || "").trim();
+    if(!s) return;
+    const rb = ownerKeyOf(x.register_barcode || x.read_barcode || "");
+    // 同じ読取値、または、その品番の純正品番ラベルとして登録したもの（読取値もその品番に当てはまる）
+    const same = rb && rb === key;
+    const part = isMazdaPartCodeMatch(x.read_barcode || "", s) && isMazdaPartCodeMatch(read, s);
+    if(same || part) out.add(s);
+  });
+  return Array.from(out);
+}
+
+// 2026-11-21：検品データの所有者のうち、バーコードが「その品番そのもの」（純正品番で登録）で、読取値がその品番のラベルに当てはまるもの
+function partCodeOwnersOf(read){
+  const out = new Set();
+  if(!read) return [];
+  state.ownerIndex.forEach((skus, bc) => {
+    skus.forEach(s => {
+      if(normalizeSkuCode(bc) === normalizeSkuCode(s) && isMazdaPartCodeMatch(read, bc)) out.add(s);
+    });
+  });
+  return Array.from(out);
 }
 
 // 管理者確認画面用：登録済みバーコードをすべて表示し、「変更」で無効になる1本を示す。
@@ -873,6 +942,14 @@ function markHold(r,reason,memo=""){
   });
 }
 
+// 2026-11-21：日本語の変換の途中の文字・ひらがな・全角の文字は、照合・登録に渡さない
+function hasNonAsciiScan(v){return /[^\x21-\x7E]/.test(String(v||"").replace(/[\s-]/g,""))}
+function rejectNonAsciiBarcode(raw){
+  if($("barcodeInput")) $("barcodeInput").value = "";
+  state.lastReadBarcode = "";
+  if($("readValue")) $("readValue").textContent = "スキャン待機中";
+  showMsg("itemMsg", "日本語の文字が入りました（照合・登録はしていません）。キーボードが日本語になっています。スキャナーの電源を切る → 欄を押す → 地球のマークで「ABC」→ スキャナーの電源を入れる、のあとで読み直してください。");
+}
 function handleBarcode(raw){
   const activeView = document.querySelector(".view.active");
 
@@ -881,6 +958,9 @@ function handleBarcode(raw){
     if($("barcodeInput")) $("barcodeInput").value = "";
     return;
   }
+
+  // 2026-11-21：英数字以外（変換の途中の文字・ひらがな・全角）が入っていたら照合・登録をしない
+  if(hasNonAsciiScan(raw)) return rejectNonAsciiBarcode(raw);
 
   const r = state.currentItems[state.currentIndex];
   const read = normalizeBarcode(raw);
@@ -903,7 +983,8 @@ function handleBarcode(raw){
     // スタッフ単独の初回登録にせず管理者の共通登録確認へ進める。
     // 別SKU登録が無い場合・確認できない旧bundleの場合は従来の初回登録のまま。
     const ownerInfo = getOtherOwnerSkus(r.sku, read);
-    if(ownerInfo.available && ownerInfo.owners.length){
+    // 2026-11-21：索引の無い古いデータでも、この端末で別の品番に登録したバーコードなら止める
+    if(ownerInfo.owners.length && (ownerInfo.available || ownerInfo.sessionOwners.length || ownerInfo.bundleOwners.length)){
       return showNoBarcodeCrossSkuNotice(r, read, ownerInfo.owners);
     }
 
@@ -2003,6 +2084,7 @@ function updateLocalResultCount(){
   if(unsavedCountEl){
     unsavedCountEl.textContent = `${unsavedRows.length}件`;
   }
+  try{renderStatusBar();}catch(e){}
 }
 
 function hasUnsavedLocalResults(){
@@ -2130,7 +2212,7 @@ $("staffCodeInput").addEventListener("keydown", e=>{
   }
 });
 $("bundleFile").addEventListener("change",renderLoadedCsvList);
-$("loadCsvBtn").onclick=async()=>{try{const b=await readBundleCsv($("bundleFile"));state.staffList=b.staffRows;state.inspectionRows=b.itemRows;state.processedRows=b.processedRows||[];buildParcelMap(b.parcelRows||[]);const staff=state.staffList.find(s=>s.staff_code===state.pendingStaffCode&&s.active_flag==="1");if(!staff){
+$("loadCsvBtn").onclick=async()=>{try{const b=await readBundleCsv($("bundleFile"));saveBundleMeta(b.bundleCreatedAt,($("bundleFile").files[0]||{}).name||"");state.staffList=b.staffRows;state.inspectionRows=b.itemRows;state.processedRows=b.processedRows||[];buildParcelMap(b.parcelRows||[]);const staff=state.staffList.find(s=>s.staff_code===state.pendingStaffCode&&s.active_flag==="1");if(!staff){
       showModal("社員番号エラー",
         `<p>社員番号が登録されていない、または使用できません。</p>
          <p>入力した社員番号：${state.pendingStaffCode}</p>`,
@@ -2266,6 +2348,12 @@ function showProcessedInvoiceModal(inv, processed){
 }
 
 $("invoiceSearchBtn").onclick=()=>{
+  // 2026-11-21：日本語の文字が入ったときは、該当なしにせず読み直しの案内
+  if(hasNonAsciiScan(normalizeInvoiceNo($("invoiceInput").value))){
+    showMsg("invoiceMsg","日本語の文字が入りました。キーボードが日本語になっています。スキャナーの電源を切る → 欄を押す → 地球のマークで「ABC」→ スキャナーの電源を入れる、のあとで読み直してください。");
+    clearInvoiceInput();
+    return;
+  }
   const scannedInv=normalizeInvoiceNo($("invoiceInput").value);
   // 段階7e：再発行の前の番号（無効にした番号）は、検品を開かない
   if(scannedInv && state.voidInvoices && state.voidInvoices.has(scannedInv)){
@@ -2294,8 +2382,9 @@ $("invoiceSearchBtn").onclick=()=>{
       return;
     }
 
-    showMsg("invoiceMsg",`該当なし：${inv} は検品データにありません。もう一度読み込んでください。`);
+    showMsg("invoiceMsg",`該当なし：${inv}`);
     clearInvoiceInput();
+    showNotFoundModal(inv);
     return;
   }
 
@@ -2343,6 +2432,7 @@ $("invoiceSearchBtn").onclick=()=>{
           state.startedAt=nowText();
           closeModal();
           renderOrder();
+          openSingleItemIfReady();
         }},
         {label:"キャンセル",onClick:()=>{
   closeModal();
@@ -2356,6 +2446,7 @@ $("invoiceSearchBtn").onclick=()=>{
 
     state.startedAt=nowText();
   renderOrder();
+  openSingleItemIfReady();
 };
 
 $("invoiceInput").addEventListener("keydown", e => {
@@ -2444,6 +2535,7 @@ function showAdminReinspection(inv){
 
                   closeModal();
                   renderOrder();
+                  openSingleItemIfReady();
                 }
               },
               {
@@ -2548,13 +2640,47 @@ $("manualBtn").onclick=()=>{
   }
 };
 
-$("barcodeInput").addEventListener("keydown",e=>{if(e.key==="Enter"){clearTimeout(barcodeInputTimer);const v=$("barcodeInput").value;
-$("barcodeInput").value="";
-handleBarcode(v)}});
+// 2026-11-21 fix2：日本語のキーボードでも、改行が来たら必ず処理する（無反応・つながりを防ぐ）
+function processBarcodeInputNow(){
+  clearTimeout(barcodeInputTimer); clearTimeout(barcodePendingTimer); clearTimeout(barcodeComposeTimer);
+  barcodePendingEnter = false;
+  const el = $("barcodeInput");
+  if(!el) return;
+  const wasComposing = barcodeComposing;
+  barcodeComposing = false;
+  const v = el.value;
+  el.value = "";
+  if(wasComposing){ try{ el.blur(); }catch(e){} el.value = ""; }
+  if(String(v||"").trim()){
+    if(!hasNonAsciiScan(v) && $("itemMsg")) showMsg("itemMsg", ""); // 前の赤い案内を消す
+    handleBarcode(v);
+  }
+  if(wasComposing){
+    const av = document.querySelector(".view.active");
+    const md = $("modal");
+    if(av && av.id === "itemView" && (!md || md.classList.contains("hidden"))){ try{ el.focus(); }catch(e){} }
+  }
+}
+$("barcodeInput").addEventListener("compositionstart",()=>{barcodeComposing=true;clearTimeout(barcodeInputTimer)});
+$("barcodeInput").addEventListener("compositionend",e=>{barcodeComposing=false;clearTimeout(barcodeInputTimer);clearTimeout(barcodeComposeTimer);
+// fix3：iPhone の日本語のキーボードでは、スキャナーの改行は「変換の確定」に使われ、改行（keydown）は来ない。
+// 変換が決まったら、その時点で処理する（英数字は照合、それ以外は照合・登録せずに案内）。
+clearTimeout(barcodePendingTimer);barcodePendingTimer=setTimeout(processBarcodeInputNow,30);});
+$("barcodeInput").addEventListener("blur",()=>{barcodeComposing=false});
+$("barcodeInput").addEventListener("keydown",e=>{if(e.key!=="Enter")return;
+clearTimeout(barcodeInputTimer);
+if(e.isComposing){ // 変換の途中の改行：確定を待ってから処理（来なければ 300ms 後に処理）
+barcodePendingEnter=true;clearTimeout(barcodePendingTimer);barcodePendingTimer=setTimeout(processBarcodeInputNow,300);return}
+e.preventDefault();processBarcodeInputNow()});
 $("barcodeInput").addEventListener("change",e=>{const v=e.target.value;
 if(v){e.target.value="";handleBarcode(v)}});
 $("barcodeInput").addEventListener("input", e=>{
   clearTimeout(barcodeInputTimer);
+  if(e.isComposing || barcodeComposing){ // 変換の途中は待つ（改行が来ないまま止まったら 800ms 後に処理）
+    clearTimeout(barcodeComposeTimer);
+    barcodeComposeTimer = setTimeout(()=>{ if(barcodeComposing && $("barcodeInput").value) processBarcodeInputNow(); }, 800);
+    return;
+  }
 
   barcodeInputTimer = setTimeout(()=>{
     const v = e.target.value;
@@ -2800,4 +2926,127 @@ function normalizeInvoiceNo(v){
   }
 
   return s;
+}
+
+
+/* ==================================================
+   2026-11-17：再発防止
+   ③ 送り状読込の画面に、端末名・検品用CSVの作成日時・この端末でまだCSVにしていない件数を、いつも出す
+   ② 「該当なし」を大きく知らせる（何も記録しない。検品済みにもしない）
+   データは消さない。今あるキーは変えず、新しいキーを2つ足すだけ
+   ================================================== */
+const DEVICE_NAME_KEY = "hyogo_parts_inspection_7fp9q1_device_name_v1";
+const BUNDLE_META_KEY = "hyogo_parts_inspection_7fp9q1_bundle_meta_v1";
+
+function getDeviceName(){
+  try{ return (localStorage.getItem(DEVICE_NAME_KEY) || "").trim(); }catch(e){ return ""; }
+}
+
+function setDeviceName(v){
+  const s = String(v || "").trim().slice(0, 12);
+  if(!s) return false;
+  localStorage.setItem(DEVICE_NAME_KEY, s);
+  return true;
+}
+
+let deviceNameAsked = false;
+function askDeviceNameIfEmpty(){
+  if(getDeviceName() || deviceNameAsked) return;
+  deviceNameAsked = true;
+  openDeviceNameModal();
+}
+
+function openDeviceNameModal(){
+  const cur = getDeviceName();
+  showModal("この端末の名前",
+    "<p>この iPhone の名前を入れてください（例：水色、ピンク）。<br>画面の上に出ます。端末ごとに別の名前にしてください。</p>" +
+    "<p><strong>名前を入れたら、キーボードを「ABC」（英語）に戻してください。</strong><br>日本語のままだと、スキャンした送り状Noがひらがなになります。<br>スキャナーをつないでいるとキーボードが出ません。スキャナーの電源を切る → 送り状Noの欄を押す → 地球のマークで「ABC」→ スキャナーの電源を入れる。</p>" +
+    `<input id="deviceNameInput" class="input big" maxlength="12" value="${escapeHtmlText(cur)}" autocomplete="off">` +
+    '<p id="deviceNameMsg" class="msg"></p>',
+    [{label:"決定", kind:"primary", onClick:()=>{
+        const v = ($("deviceNameInput") || {}).value || "";
+        if(!setDeviceName(v)){ showMsg("deviceNameMsg", "名前を入れてください"); return; }
+        closeModal(); renderStatusBar();
+      }},
+     {label:"あとで", onClick:()=>{ closeModal(); renderStatusBar(); }}]);
+  setTimeout(()=>{ const el=$("deviceNameInput"); if(el) el.focus(); }, 100);
+}
+
+function saveBundleMeta(createdAt, fileName){
+  try{
+    localStorage.setItem(BUNDLE_META_KEY, JSON.stringify({created_at:createdAt||"", file_name:fileName||"", loaded_at:nowText()}));
+  }catch(e){}
+}
+
+function getBundleMeta(){
+  try{ return JSON.parse(localStorage.getItem(BUNDLE_META_KEY) || "null"); }catch(e){ return null; }
+}
+
+function rpShortTime(s){
+  const m = String(s || "").match(/^(\d{4})[-\/](\d{1,2})[-\/](\d{1,2})[ T](\d{1,2}):(\d{2})/);
+  return m ? `${Number(m[2])}/${Number(m[3])} ${m[4].padStart(2,"0")}:${m[5]}` : String(s || "");
+}
+
+function rpInvoiceSet(rows){
+  const s = new Set();
+  (rows || []).forEach(r => { const v = normalizeInvoiceNo(r.invoice_no); if(v) s.add(v); });
+  return s;
+}
+
+// この端末で、まだCSVにしていない完了（送り状の数）と、保存確認前のCSVの中身
+function rpExportStatus(){
+  const unexported = rpInvoiceSet(getUnexportedResultRows());
+  const last = isLastExportPending() ? getLastExport() : null;
+  let inPending = new Set();
+  if(last){
+    try{ inPending = rpInvoiceSet(parseCsv(last.csv_text)); }catch(e){}
+  }
+  let after = 0;
+  unexported.forEach(v => { if(!inPending.has(v)) after++; });
+  return { unexported: unexported.size, pending: last, pendingCount: inPending.size, afterPending: after };
+}
+
+function renderStatusBar(){
+  const el = $("statusBar");
+  if(!el) return;
+  const name = getDeviceName();
+  const meta = getBundleMeta();
+  const st = rpExportStatus();
+  let bundleText;
+  if(!meta){
+    bundleText = "検品用CSV：まだ読み込んでいません";
+  }else if(meta.created_at){
+    bundleText = `検品用CSV：${rpShortTime(meta.created_at)} 作成（読み込み ${rpShortTime(meta.loaded_at)}）`;
+  }else{
+    bundleText = `検品用CSV：作成日時が分からない（古い形式）・読み込み ${rpShortTime(meta.loaded_at)}`;
+  }
+  let exportText;
+  if(st.pending){
+    exportText = `<div class="sbWarn">保存確認前のCSVがあります：${escapeHtmlText(st.pending.file_name)}（${st.pendingCount}件）<br>「CSV再読込」から「ファイルを確認できた」か「CSVを再保存」をしてください。</div>` +
+                 (st.afterPending > 0 ? `<div class="sbWarn">そのあとに完了して、まだCSVにしていない：${st.afterPending}件</div>` : "");
+  }else if(st.unexported > 0){
+    exportText = `<div class="sbWarn">この端末で、まだCSVにしていない完了：${st.unexported}件</div>`;
+  }else{
+    exportText = `<div>この端末で、まだCSVにしていない完了：0件</div>`;
+  }
+  el.innerHTML =
+    `<div class="sbDevice">端末：${name ? escapeHtmlText(name) : "（名前なし）"} <button type="button" class="sbBtn" id="deviceNameBtn">名前</button></div>` +
+    `<div>${escapeHtmlText(bundleText)}</div>` +
+    exportText +
+    '<div class="sbNote">※CSVにしただけでは、パソコンには入っていません。0件でも、パソコンの「検品結果取込」が済んだとは限りません。</div>';
+  const b = $("deviceNameBtn");
+  if(b) b.onclick = openDeviceNameModal;
+}
+
+function showNotFoundModal(inv){
+  const meta = getBundleMeta();
+  const created = meta && meta.created_at ? rpShortTime(meta.created_at) + " 作成" : "作成日時が分からない";
+  showModal("この送り状は、今の検品用CSVにありません",
+    `<div class="bigAlert"><p>送り状：<strong>${escapeHtmlText(inv)}</strong></p>` +
+    `<p>今の検品用CSV：${escapeHtmlText(created)}</p></div>` +
+    "<p>1. 「CSV再読込」を押して、最新の検品用CSVを読み込んでください。</p>" +
+    "<p>2. それでも出るときは、次を確かめてください。<br>・送り状番号を読み間違えていないか<br>・パソコンで、この注文の「スマホ検品CSV作成」（ヤマトは発行済データ取込・個口の確定）が済んでいるか</p>" +
+    "<p><strong>この送り状は、検品済みにはなっていません。</strong></p>",
+    [{label:"CSV再読込", kind:"primary", onClick:()=>{ closeModal(); $("reloadBtn").click(); }},
+     {label:"閉じる", onClick:()=>{ closeModal(); setTimeout(()=>{ const i=$("invoiceInput"); if(i) i.focus(); }, 100); }}]);
 }

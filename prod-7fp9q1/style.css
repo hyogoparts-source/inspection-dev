@@ -548,3 +548,11 @@ button {
   color: #4b5563 !important;
   border-color: #d1d5db !important;
 }
+
+/* 2026-11-17：再発防止（端末名・作成日時・未出力件数／該当なし） */
+.statusBar{border:2px solid #1d4ed8;border-radius:8px;padding:8px 10px;margin:6px 0 10px;background:#eff6ff;font-size:15px;line-height:1.5}
+.statusBar .sbDevice{font-weight:bold;font-size:17px}
+.statusBar .sbWarn{color:#b91c1c;font-weight:bold}
+.statusBar .sbNote{font-size:12px;color:#374151;margin-top:4px}
+.statusBar .sbBtn{font-size:12px;padding:2px 8px;margin-left:6px}
+.bigAlert{border:3px solid #b91c1c;background:#fef2f2;border-radius:8px;padding:8px 10px;font-size:18px}
