@@ -2609,8 +2609,9 @@ function processBarcodeInputNow(){
 }
 $("barcodeInput").addEventListener("compositionstart",()=>{barcodeComposing=true;clearTimeout(barcodeInputTimer)});
 $("barcodeInput").addEventListener("compositionend",e=>{barcodeComposing=false;clearTimeout(barcodeInputTimer);clearTimeout(barcodeComposeTimer);
-if(barcodePendingEnter){setTimeout(processBarcodeInputNow,0);return}
-const v=e.target.value;if(v&&hasNonAsciiScan(v)){rejectNonAsciiBarcode(v)}});
+// fix3：iPhone の日本語のキーボードでは、スキャナーの改行は「変換の確定」に使われ、改行（keydown）は来ない。
+// 変換が決まったら、その時点で処理する（英数字は照合、それ以外は照合・登録せずに案内）。
+clearTimeout(barcodePendingTimer);barcodePendingTimer=setTimeout(processBarcodeInputNow,30);});
 $("barcodeInput").addEventListener("blur",()=>{barcodeComposing=false});
 $("barcodeInput").addEventListener("keydown",e=>{if(e.key!=="Enter")return;
 clearTimeout(barcodeInputTimer);
