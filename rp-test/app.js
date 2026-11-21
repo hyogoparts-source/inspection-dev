@@ -2,6 +2,7 @@
 const state={staff:null,staffList:[],inspectionRows:[],processedRows:[],barcodeMap:new Map(),aliasMap:new Map(),noBarcodeSet:new Set(),currentInvoice:null,currentItems:[],currentIndex:0,results:[],startedAt:null,lastReadBarcode:"",lastMismatchBarcode:"",lastMismatchMaster:"",ownerIndex:new Map(),ownerIndexAvailable:false,pendingAddApproval:null};
 const $=id=>document.getElementById(id);
 let barcodeInputTimer = null;
+let barcodeComposing = false; // 2026-11-21：日本語の変換の途中
 
 function show(id){
   document.querySelectorAll(".view").forEach(v=>v.classList.remove("active"));
@@ -143,6 +144,7 @@ function focusBarcodeInput(){
   if(!input) return;
 
   input.value = "";
+  barcodeComposing = false; // 2026-11-21
 
   // すぐフォーカス
   input.focus();
@@ -335,6 +337,16 @@ setTimeout(() => {
 }, 80);
 }
 
+// 2026-11-21：送り状を読んだ後、検品対象が1明細なら「検品開始」を押さずに商品の画面を開く
+// （未検品のときだけ。複数個口・再発行の案内が出る注文は、案内を見てもらうため一覧のまま）
+function openSingleItemIfReady(){
+  const items = state.currentItems || [];
+  if(items.length !== 1) return;
+  if(statusOf(items[0]) !== "未検品") return;
+  if(parcelInfoHtml() !== "") return;
+  state.currentIndex = 0;
+  renderItem();
+}
 function firstPendingIndex(){return state.currentItems.findIndex(r=>statusOf(r)==="未検品")}
 function renderItem(){const r=state.currentItems[state.currentIndex];if(!r)return renderComplete();
 $("itemInvoice").textContent=r.invoice_no||"";
@@ -875,6 +887,14 @@ function markHold(r,reason,memo=""){
   });
 }
 
+// 2026-11-21：日本語の変換の途中の文字・ひらがな・全角の文字は、照合・登録に渡さない
+function hasNonAsciiScan(v){return /[^\x21-\x7E]/.test(String(v||"").replace(/[\s-]/g,""))}
+function rejectNonAsciiBarcode(raw){
+  if($("barcodeInput")) $("barcodeInput").value = "";
+  state.lastReadBarcode = "";
+  if($("readValue")) $("readValue").textContent = "スキャン待機中";
+  showMsg("itemMsg", "日本語の文字が入りました（照合・登録はしていません）。キーボードが日本語になっています。スキャナーの電源を切る → 欄を押す → 地球のマークで「ABC」→ スキャナーの電源を入れる、のあとで読み直してください。");
+}
 function handleBarcode(raw){
   const activeView = document.querySelector(".view.active");
 
@@ -883,6 +903,9 @@ function handleBarcode(raw){
     if($("barcodeInput")) $("barcodeInput").value = "";
     return;
   }
+
+  // 2026-11-21：英数字以外（変換の途中の文字・ひらがな・全角）が入っていたら照合・登録をしない
+  if(hasNonAsciiScan(raw)) return rejectNonAsciiBarcode(raw);
 
   const r = state.currentItems[state.currentIndex];
   const read = normalizeBarcode(raw);
@@ -2269,6 +2292,12 @@ function showProcessedInvoiceModal(inv, processed){
 }
 
 $("invoiceSearchBtn").onclick=()=>{
+  // 2026-11-21：日本語の文字が入ったときは、該当なしにせず読み直しの案内
+  if(hasNonAsciiScan(normalizeInvoiceNo($("invoiceInput").value))){
+    showMsg("invoiceMsg","日本語の文字が入りました。キーボードが日本語になっています。スキャナーの電源を切る → 欄を押す → 地球のマークで「ABC」→ スキャナーの電源を入れる、のあとで読み直してください。");
+    clearInvoiceInput();
+    return;
+  }
   const scannedInv=normalizeInvoiceNo($("invoiceInput").value);
   // 段階7e：再発行の前の番号（無効にした番号）は、検品を開かない
   if(scannedInv && state.voidInvoices && state.voidInvoices.has(scannedInv)){
@@ -2347,6 +2376,7 @@ $("invoiceSearchBtn").onclick=()=>{
           state.startedAt=nowText();
           closeModal();
           renderOrder();
+          openSingleItemIfReady();
         }},
         {label:"キャンセル",onClick:()=>{
   closeModal();
@@ -2360,6 +2390,7 @@ $("invoiceSearchBtn").onclick=()=>{
 
     state.startedAt=nowText();
   renderOrder();
+  openSingleItemIfReady();
 };
 
 $("invoiceInput").addEventListener("keydown", e => {
@@ -2448,6 +2479,7 @@ function showAdminReinspection(inv){
 
                   closeModal();
                   renderOrder();
+                  openSingleItemIfReady();
                 }
               },
               {
@@ -2552,13 +2584,18 @@ $("manualBtn").onclick=()=>{
   }
 };
 
-$("barcodeInput").addEventListener("keydown",e=>{if(e.key==="Enter"){clearTimeout(barcodeInputTimer);const v=$("barcodeInput").value;
+$("barcodeInput").addEventListener("compositionstart",()=>{barcodeComposing=true;clearTimeout(barcodeInputTimer)});
+$("barcodeInput").addEventListener("compositionend",e=>{barcodeComposing=false;clearTimeout(barcodeInputTimer);const v=e.target.value;if(v&&hasNonAsciiScan(v)){rejectNonAsciiBarcode(v)}});
+$("barcodeInput").addEventListener("blur",()=>{barcodeComposing=false});
+$("barcodeInput").addEventListener("keydown",e=>{if(e.key==="Enter"&&(e.isComposing||e.keyCode===229)){e.preventDefault();clearTimeout(barcodeInputTimer);return}
+if(e.key==="Enter"){barcodeComposing=false;clearTimeout(barcodeInputTimer);const v=$("barcodeInput").value;
 $("barcodeInput").value="";
 handleBarcode(v)}});
 $("barcodeInput").addEventListener("change",e=>{const v=e.target.value;
 if(v){e.target.value="";handleBarcode(v)}});
 $("barcodeInput").addEventListener("input", e=>{
   clearTimeout(barcodeInputTimer);
+  if(e.isComposing || barcodeComposing) return; // 変換の途中は待つ
 
   barcodeInputTimer = setTimeout(()=>{
     const v = e.target.value;
