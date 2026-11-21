@@ -3,6 +3,7 @@ const state={staff:null,staffList:[],inspectionRows:[],processedRows:[],barcodeM
 const $=id=>document.getElementById(id);
 let barcodeInputTimer = null;
 let barcodeComposing = false; // 2026-11-21：日本語の変換の途中
+let barcodePendingEnter = false; let barcodePendingTimer = null; let barcodeComposeTimer = null; // fix2
 
 function show(id){
   document.querySelectorAll(".view").forEach(v=>v.classList.remove("active"));
@@ -145,6 +146,7 @@ function focusBarcodeInput(){
 
   input.value = "";
   barcodeComposing = false; // 2026-11-21
+  barcodePendingEnter = false; clearTimeout(barcodePendingTimer); clearTimeout(barcodeComposeTimer); // fix2
 
   // すぐフォーカス
   input.focus();
@@ -2584,18 +2586,46 @@ $("manualBtn").onclick=()=>{
   }
 };
 
+// 2026-11-21 fix2：日本語のキーボードでも、改行が来たら必ず処理する（無反応・つながりを防ぐ）
+function processBarcodeInputNow(){
+  clearTimeout(barcodeInputTimer); clearTimeout(barcodePendingTimer); clearTimeout(barcodeComposeTimer);
+  barcodePendingEnter = false;
+  const el = $("barcodeInput");
+  if(!el) return;
+  const wasComposing = barcodeComposing;
+  barcodeComposing = false;
+  const v = el.value;
+  el.value = "";
+  if(wasComposing){ try{ el.blur(); }catch(e){} el.value = ""; }
+  if(String(v||"").trim()){
+    if(!hasNonAsciiScan(v) && $("itemMsg")) showMsg("itemMsg", ""); // 前の赤い案内を消す
+    handleBarcode(v);
+  }
+  if(wasComposing){
+    const av = document.querySelector(".view.active");
+    const md = $("modal");
+    if(av && av.id === "itemView" && (!md || md.classList.contains("hidden"))){ try{ el.focus(); }catch(e){} }
+  }
+}
 $("barcodeInput").addEventListener("compositionstart",()=>{barcodeComposing=true;clearTimeout(barcodeInputTimer)});
-$("barcodeInput").addEventListener("compositionend",e=>{barcodeComposing=false;clearTimeout(barcodeInputTimer);const v=e.target.value;if(v&&hasNonAsciiScan(v)){rejectNonAsciiBarcode(v)}});
+$("barcodeInput").addEventListener("compositionend",e=>{barcodeComposing=false;clearTimeout(barcodeInputTimer);clearTimeout(barcodeComposeTimer);
+if(barcodePendingEnter){setTimeout(processBarcodeInputNow,0);return}
+const v=e.target.value;if(v&&hasNonAsciiScan(v)){rejectNonAsciiBarcode(v)}});
 $("barcodeInput").addEventListener("blur",()=>{barcodeComposing=false});
-$("barcodeInput").addEventListener("keydown",e=>{if(e.key==="Enter"&&(e.isComposing||e.keyCode===229)){e.preventDefault();clearTimeout(barcodeInputTimer);return}
-if(e.key==="Enter"){barcodeComposing=false;clearTimeout(barcodeInputTimer);const v=$("barcodeInput").value;
-$("barcodeInput").value="";
-handleBarcode(v)}});
+$("barcodeInput").addEventListener("keydown",e=>{if(e.key!=="Enter")return;
+clearTimeout(barcodeInputTimer);
+if(e.isComposing){ // 変換の途中の改行：確定を待ってから処理（来なければ 300ms 後に処理）
+barcodePendingEnter=true;clearTimeout(barcodePendingTimer);barcodePendingTimer=setTimeout(processBarcodeInputNow,300);return}
+e.preventDefault();processBarcodeInputNow()});
 $("barcodeInput").addEventListener("change",e=>{const v=e.target.value;
 if(v){e.target.value="";handleBarcode(v)}});
 $("barcodeInput").addEventListener("input", e=>{
   clearTimeout(barcodeInputTimer);
-  if(e.isComposing || barcodeComposing) return; // 変換の途中は待つ
+  if(e.isComposing || barcodeComposing){ // 変換の途中は待つ（改行が来ないまま止まったら 800ms 後に処理）
+    clearTimeout(barcodeComposeTimer);
+    barcodeComposeTimer = setTimeout(()=>{ if(barcodeComposing && $("barcodeInput").value) processBarcodeInputNow(); }, 800);
+    return;
+  }
 
   barcodeInputTimer = setTimeout(()=>{
     const v = e.target.value;
