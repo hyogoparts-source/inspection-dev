@@ -593,11 +593,64 @@ function buildOwnerIndex(b){
 function getOtherOwnerSkus(sku, read){
   const self = String(sku || "").trim().toUpperCase();
   const set = state.ownerIndex.get(ownerKeyOf(read)) || new Set();
-  const owners = Array.from(set)
+  // 2026-11-21：この端末でOKにしてまだPCに取り込んでいない登録（初回・追加・共通）も所有者に数える
+  const sessionOwners = sessionRegisteredOwners(read).filter(s => s.toUpperCase() !== self);
+  // 2026-11-21：純正品番のラベル（品番＋チェック文字。例 N243691N7PR$）は、品番で登録された別の品番も所有者に数える
+  const partCodeOwners = partCodeOwnersOf(read);
+  // 2026-11-21：左右・前後に分けた部品で、もう片方の品番のラベルを読んだとき（どちらも未登録でも止める）
+  const bundleOwners = bundlePartCodeOwnersOf(sku, read);
+  const owners = Array.from(new Set([...Array.from(set), ...sessionOwners, ...partCodeOwners, ...bundleOwners]))
     .filter(s => s.toUpperCase() !== self)
     .sort();
 
-  return {available: state.ownerIndexAvailable, owners};
+  return {available: state.ownerIndexAvailable, owners, sessionOwners, bundleOwners};
+}
+
+// 2026-11-21：検品データ（ITEM行）にある別の品番のうち、読取値がその品番の純正品番ラベルに当たるもの。
+// 読取値がこの行の品番のラベルにも当たるときは、この行のものとみなして何も返さない。
+function bundlePartCodeOwnersOf(sku, read){
+  const self = String(sku || "").trim();
+  if(!read || !self) return [];
+  if(isMazdaPartCodeMatch(read, self)) return [];
+  const out = new Set();
+  (state.inspectionRows || []).forEach(x => {
+    const s = String((x && x.sku) || "").trim();
+    if(s && s.toUpperCase() !== self.toUpperCase() && isMazdaPartCodeMatch(read, s)) out.add(s);
+  });
+  return Array.from(out);
+}
+
+// 2026-11-21：この端末の検品結果（検品中の行と、端末に保存した結果）のうち、OK で barcode_register_flag=1 の行のバーコードと品番。
+// 同じ箱を、前後・左右など別の構成部品にも初回登録してしまうのを防ぐため（送り状が別でも、PCへ取り込む前なら同じ）
+function sessionRegisteredOwners(read){
+  const key = ownerKeyOf(read);
+  const out = new Set();
+  if(!key) return [];
+  let saved = [];
+  try{ saved = getLocalResults() || []; }catch(e){ saved = []; }
+  (state.results || []).concat(saved).forEach(x => {
+    if(!x || x.status !== "OK" || String(x.barcode_register_flag) !== "1") return;
+    const s = String(x.sku || "").trim();
+    if(!s) return;
+    const rb = ownerKeyOf(x.register_barcode || x.read_barcode || "");
+    // 同じ読取値、または、その品番の純正品番ラベルとして登録したもの（読取値もその品番に当てはまる）
+    const same = rb && rb === key;
+    const part = isMazdaPartCodeMatch(x.read_barcode || "", s) && isMazdaPartCodeMatch(read, s);
+    if(same || part) out.add(s);
+  });
+  return Array.from(out);
+}
+
+// 2026-11-21：検品データの所有者のうち、バーコードが「その品番そのもの」（純正品番で登録）で、読取値がその品番のラベルに当てはまるもの
+function partCodeOwnersOf(read){
+  const out = new Set();
+  if(!read) return [];
+  state.ownerIndex.forEach((skus, bc) => {
+    skus.forEach(s => {
+      if(normalizeSkuCode(bc) === normalizeSkuCode(s) && isMazdaPartCodeMatch(read, bc)) out.add(s);
+    });
+  });
+  return Array.from(out);
 }
 
 // 管理者確認画面用：登録済みバーコードをすべて表示し、「変更」で無効になる1本を示す。
@@ -930,7 +983,8 @@ function handleBarcode(raw){
     // スタッフ単独の初回登録にせず管理者の共通登録確認へ進める。
     // 別SKU登録が無い場合・確認できない旧bundleの場合は従来の初回登録のまま。
     const ownerInfo = getOtherOwnerSkus(r.sku, read);
-    if(ownerInfo.available && ownerInfo.owners.length){
+    // 2026-11-21：索引の無い古いデータでも、この端末で別の品番に登録したバーコードなら止める
+    if(ownerInfo.owners.length && (ownerInfo.available || ownerInfo.sessionOwners.length || ownerInfo.bundleOwners.length)){
       return showNoBarcodeCrossSkuNotice(r, read, ownerInfo.owners);
     }
 
@@ -1501,6 +1555,7 @@ function renderComplete(){
   $("saveMsg").textContent = "端末内に検品結果を保存しました。";
 
   show("completeView");
+  focusCompleteScanInput(); // 2026-11-24
 }
 
 
@@ -1985,7 +2040,7 @@ function downloadBatchCsv(){
   const p = n => String(n).padStart(2, "0");
 
   const name =
-    `TEST_inspection_result_batch_` +
+    `inspection_result_batch_` +
     `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}_` +
     `${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}.csv`;
 
@@ -2996,3 +3051,64 @@ function showNotFoundModal(inv){
     [{label:"CSV再読込", kind:"primary", onClick:()=>{ closeModal(); $("reloadBtn").click(); }},
      {label:"閉じる", onClick:()=>{ closeModal(); setTimeout(()=>{ const i=$("invoiceInput"); if(i) i.focus(); }, 100); }}]);
 }
+
+// 2026-11-24：「検品完了」の画面のまま送り状を読んだら、その送り状の検品に進む
+// （「次の送り状へ」を押し忘れて読んだ送り状が、何も出ずに捨てられて抜けるのを防ぐ。画面のボタンは今までどおり押せる）
+let completeScanComposing = false, completeScanTimer = null;
+function completeScanReady(){
+  const av = document.querySelector(".view.active");
+  const md = $("modal");
+  return !!(av && av.id === "completeView" && (!md || md.classList.contains("hidden")));
+}
+function focusCompleteScanInput(keepValue){
+  const el = $("completeScanInput");
+  if(!el) return;
+  if(!keepValue){ el.value = ""; completeScanComposing = false; }
+  const f = () => { if(completeScanReady() && document.activeElement !== el){ try{ el.focus(); }catch(e){} } };
+  f(); requestAnimationFrame(f); setTimeout(f, 50);
+}
+function processCompleteScanNow(){
+  clearTimeout(completeScanTimer);
+  const el = $("completeScanInput");
+  if(!el) return;
+  const v = String(el.value || "").trim();
+  el.value = "";
+  completeScanComposing = false;
+  if(!completeScanReady() || !v) return;
+  if(hasNonAsciiScan(v)){
+    showMsg("saveMsg", "日本語の文字が入りました（送り状は開いていません）。キーボードが日本語になっています。スキャナーの電源を切る →「次の送り状へ」を押す → 送り状の欄を押す → 地球のマークで「ABC」→ スキャナーの電源を入れる、のあとで読み直してください。");
+    focusCompleteScanInput();
+    return;
+  }
+  if(isAllBundleInvoicesCompletedOnThisDevice()){
+    showMsg("saveMsg", "すべての送り状の検品が終わっています（読んだ送り状 " + v + " は開いていません）。");
+    focusCompleteScanInput();
+    return;
+  }
+  // 「次の送り状へ」を押したのと同じ → 送り状の欄に入れて「表示」
+  $("nextInvoiceBtn").classList.add("hidden");
+  $("saveMsg").textContent = "";
+  show("scanInvoiceView");
+  resetInvoiceScreen();
+  $("invoiceInput").value = v;
+  $("invoiceSearchBtn").click();
+}
+(function(){
+  const el = $("completeScanInput");
+  if(!el) return;
+  el.addEventListener("compositionstart", () => { completeScanComposing = true; clearTimeout(completeScanTimer); });
+  el.addEventListener("compositionend", () => { completeScanComposing = false; clearTimeout(completeScanTimer); completeScanTimer = setTimeout(processCompleteScanNow, 30); });
+  el.addEventListener("keydown", e => {
+    if(e.key !== "Enter") return;
+    clearTimeout(completeScanTimer);
+    if(e.isComposing){ completeScanTimer = setTimeout(processCompleteScanNow, 300); return; }
+    e.preventDefault();
+    processCompleteScanNow();
+  });
+  el.addEventListener("input", e => {
+    clearTimeout(completeScanTimer);
+    completeScanTimer = setTimeout(processCompleteScanNow, (e.isComposing || completeScanComposing) ? 800 : 150);
+  });
+  // 完了の画面でボタン（途中保存・確認の画面など）を押したあとも、また読めるようにする
+  document.addEventListener("click", () => setTimeout(() => focusCompleteScanInput(true), 300));
+})();

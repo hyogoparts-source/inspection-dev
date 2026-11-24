@@ -11,7 +11,7 @@
 <body>
 <main id="app">
 <section id="loginView" class="view active">
-  <h1>HYOGO PARTS 出荷検品（試験用・本番では使わない）</h1>
+  <h1>HYOGO PARTS 出荷検品</h1>
   <label class="label">社員番号</label>
   <input id="staffCodeInput" class="input big" inputmode="numeric" pattern="[0-9]*" autocomplete="off" readonly>
 
@@ -129,6 +129,7 @@
 
 <section id="completeView" class="view">
   <h1 id="completeTitle">検品完了</h1>
+  <input id="completeScanInput" class="hiddenInput" type="text" inputmode="none" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
   <p id="completeSummary" class="summary"></p>
 
   <div class="resultStatusBox">
@@ -163,6 +164,6 @@
     <div id="modalActions" class="modalActions"></div>
   </div>
 </div>
-<script src="./app.js?v=20261121c-rptest"></script>
+<script src="./app.js?v=20261124a-rptest"></script>
 </body>
 </html>
