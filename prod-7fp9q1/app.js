@@ -1555,6 +1555,7 @@ function renderComplete(){
   $("saveMsg").textContent = "端末内に検品結果を保存しました。";
 
   show("completeView");
+  focusCompleteScanInput(); // 2026-11-24
 }
 
 
@@ -3050,3 +3051,64 @@ function showNotFoundModal(inv){
     [{label:"CSV再読込", kind:"primary", onClick:()=>{ closeModal(); $("reloadBtn").click(); }},
      {label:"閉じる", onClick:()=>{ closeModal(); setTimeout(()=>{ const i=$("invoiceInput"); if(i) i.focus(); }, 100); }}]);
 }
+
+// 2026-11-24：「検品完了」の画面のまま送り状を読んだら、その送り状の検品に進む
+// （「次の送り状へ」を押し忘れて読んだ送り状が、何も出ずに捨てられて抜けるのを防ぐ。画面のボタンは今までどおり押せる）
+let completeScanComposing = false, completeScanTimer = null;
+function completeScanReady(){
+  const av = document.querySelector(".view.active");
+  const md = $("modal");
+  return !!(av && av.id === "completeView" && (!md || md.classList.contains("hidden")));
+}
+function focusCompleteScanInput(keepValue){
+  const el = $("completeScanInput");
+  if(!el) return;
+  if(!keepValue){ el.value = ""; completeScanComposing = false; }
+  const f = () => { if(completeScanReady() && document.activeElement !== el){ try{ el.focus(); }catch(e){} } };
+  f(); requestAnimationFrame(f); setTimeout(f, 50);
+}
+function processCompleteScanNow(){
+  clearTimeout(completeScanTimer);
+  const el = $("completeScanInput");
+  if(!el) return;
+  const v = String(el.value || "").trim();
+  el.value = "";
+  completeScanComposing = false;
+  if(!completeScanReady() || !v) return;
+  if(hasNonAsciiScan(v)){
+    showMsg("saveMsg", "日本語の文字が入りました（送り状は開いていません）。キーボードが日本語になっています。スキャナーの電源を切る →「次の送り状へ」を押す → 送り状の欄を押す → 地球のマークで「ABC」→ スキャナーの電源を入れる、のあとで読み直してください。");
+    focusCompleteScanInput();
+    return;
+  }
+  if(isAllBundleInvoicesCompletedOnThisDevice()){
+    showMsg("saveMsg", "すべての送り状の検品が終わっています（読んだ送り状 " + v + " は開いていません）。");
+    focusCompleteScanInput();
+    return;
+  }
+  // 「次の送り状へ」を押したのと同じ → 送り状の欄に入れて「表示」
+  $("nextInvoiceBtn").classList.add("hidden");
+  $("saveMsg").textContent = "";
+  show("scanInvoiceView");
+  resetInvoiceScreen();
+  $("invoiceInput").value = v;
+  $("invoiceSearchBtn").click();
+}
+(function(){
+  const el = $("completeScanInput");
+  if(!el) return;
+  el.addEventListener("compositionstart", () => { completeScanComposing = true; clearTimeout(completeScanTimer); });
+  el.addEventListener("compositionend", () => { completeScanComposing = false; clearTimeout(completeScanTimer); completeScanTimer = setTimeout(processCompleteScanNow, 30); });
+  el.addEventListener("keydown", e => {
+    if(e.key !== "Enter") return;
+    clearTimeout(completeScanTimer);
+    if(e.isComposing){ completeScanTimer = setTimeout(processCompleteScanNow, 300); return; }
+    e.preventDefault();
+    processCompleteScanNow();
+  });
+  el.addEventListener("input", e => {
+    clearTimeout(completeScanTimer);
+    completeScanTimer = setTimeout(processCompleteScanNow, (e.isComposing || completeScanComposing) ? 800 : 150);
+  });
+  // 完了の画面でボタン（途中保存・確認の画面など）を押したあとも、また読めるようにする
+  document.addEventListener("click", () => setTimeout(() => focusCompleteScanInput(true), 300));
+})();
