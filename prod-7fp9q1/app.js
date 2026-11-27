@@ -84,6 +84,8 @@ function showChangeStaffModal(){
           }
 
           state.staff = staff;
+          // 2026-11-27：CSV再読込のときも、この作業者で読み込む（前は最初にログインした社員番号に戻っていた）
+          state.pendingStaffCode = staff.staff_code;
           updateStaffLabels();
           closeModal();
 
